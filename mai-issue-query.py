@@ -133,22 +133,24 @@ def build_filters(scope: str, user: str, args) -> list:
     return filters
 
 
-def fetch_all(client: McpClient, filters: list) -> list:
-    issues, page = [], 1
-    while True:
+def fetch_all(client: McpClient, filters: list, page_size: int = 100, max_pages: int = 5) -> tuple[list, bool]:
+    issues, page, truncated = [], 1, False
+    while page <= max_pages:
         result = client.call_tool("M_issueQuery", {
             "filters": filters,
-            "pageInfo": {"pageNum": page, "pageSize": 20},
+            "pageInfo": {"pageNum": page, "pageSize": page_size},
             "sorts": [{"key": "issuePriority", "value": "asc"}],
         })
         batch = extract_issues(result)
         if not batch:
             break
         issues.extend(batch)
-        if len(batch) < 20:
+        if len(batch) < page_size:
             break
         page += 1
-    return issues
+    else:
+        truncated = True
+    return issues, truncated
 
 
 # ---------- fix-db 关联 ----------
@@ -232,11 +234,15 @@ def main() -> None:
     client.initialize()
 
     filters = build_filters(args.scope, user, args)
-    issues = fetch_all(client, filters)
+    if args.scope in ("未关闭", "全部"):
+        print(f"(提示) {args.scope} 范围不限定 assignee, 结果可能很大, 已设分页上限 500 条", file=sys.stderr)
+    issues, truncated = fetch_all(client, filters)
     if not issues:
         print(f"(空) {args.scope} 范围无匹配问题")
         return
     print_table(issues, args.scope, args.json)
+    if truncated:
+        print(f"(截断) 结果超过 500 条上限, 请用 --priority/--module/--status 缩小范围", file=sys.stderr)
 
 
 if __name__ == "__main__":
