@@ -37,7 +37,9 @@ description: |
 
 ## 前置
 
-环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 可用（查询）、fix-db 可用。
+环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 配置存在（脚本直连其 API）、`mai-issue-query.py` 可用。
+
+> **为什么不直接调 mi-adt 工具**：`M_issueQuery` 返回每条问题 300+ 全字段（含工具 schema 说明），单次响应 200KB+，会撑爆上下文且输出截断。因此查询由 **`mai-issue-query.py` 脚本直连 mi-adt HTTP API** 完成，LLM 只拿到精简结果。
 
 ## 工作流程
 
@@ -47,56 +49,33 @@ description: |
 - 范围：`待办`（默认）/ `未关闭` / `全部`
 - 维度：优先级 / 模块 / 状态 / 指派人（可组合）
 
-### Step 2: 构造 mi-adt 查询
+### Step 2: 脚本查询（直接调 mi-adt API,零上下文消耗）
 
-调用 `M_issueQuery`（或 `M_getIssueInfoDataList`），filters 按范围术语 + 维度组装，例如：
-
-**待办 + Critical + 模块=相册**：
-```json
-{
-  "filters": [
-    {"key": "issueAssigneeId", "operator": "EQ", "value": ["<userName>"]},
-    {"key": "issueStatus", "operator": "NOT_IN", "value": ["Closed", "Verified"]},
-    {"key": "issuePriority", "operator": "EQ", "value": ["Critical"]},
-    {"key": "issueTestComponent", "operator": "LIKE", "value": ["相册"]},
-    {"key": "deleted", "operator": "EQ", "value": ["0"]}
-  ],
-  "pageInfo": {"pageNum": 1, "pageSize": 50},
-  "sorts": [{"key": "issuePriority", "value": "asc"}]
-}
-```
-
-**全部**：去掉 assignee 与 status 过滤，仅 `deleted=0`。
-
-> userName 默认取偏好配置（如 pengyaozong），可用 `--assignee` 覆盖。
-
-### Step 3: 关联 fix-db（MR 链接）
-
-对查询结果的**每个 issId**，关联本地修复数据库：
+运行查询脚本（WF_ROOT 定位见 mai-env-doctor）：
 
 ```bash
-python <WF_ROOT>/fix-db.py query <issId>
+python <WF_ROOT>/mai-issue-query.py <范围> [维度...]
+
+# 示例
+python <WF_ROOT>/mai-issue-query.py 待办                    # 名下待办
+python <WF_ROOT>/mai-issue-query.py 待办 --priority Critical # 待办+Critical
+python <WF_ROOT>/mai-issue-query.py 待办 --module 互联互通    # 待办+模块
+python <WF_ROOT>/mai-issue-query.py 全部 --json              # 全部(机器可读)
 ```
 
-关联规则：
-- fix-db 有 `mr: !<n>` → 拼 MR 链接 `https://git.n.xiaomi.com/ai-framework/osbot/-/merge_requests/<n>`
-- `merge_status=merged` 或状态 merged → 标注 `已合入`
-- `backport_mr` 有值 → 追加回流 MR 链接
-- 无记录 → 该问题尚未登记（未开始处理）
+脚本行为：
+- 从 `~/.claude.json`/opencode 配置读取 mi-adt url/token（不硬编码）
+- 分页拉取全量 → 只提取 issId/title/priority/status/component/changeId
+- 关联 fix-db（MR 链接 + 回流 + 处理进度）
+- 直接输出精简表格
 
-### Step 4: 输出统一表格
+**脚本不可用时 fallback**：调用 `mi-adt` `M_issueQuery`（pageSize 20 分页），但必须用工具输出**保存文件**解析（从第一个 `{` 用 `raw_decode`,忽略截断尾与 schema 说明），禁止读完整响应。
 
-```markdown
-## 名下问题编排 (<范围> 共 N 条)
+### Step 3: 输出统一表格
 
-| issId | 标题 | 优先级 | 模块 | 状态 | fix MR | 处理进度 |
-|-------|------|--------|------|------|--------|---------|
-| ISS-xxx | <标题> | Critical | 相册 | In Progress | [!123](https://git.n.xiaomi.com/ai-framework/osbot/-/merge_requests/123) | fixing |
-| ISS-yyy | <标题> | Major | 设置 | OPEN | - | 未开始 |
-
-说明：
-- 待办列表只含未 fix 问题；已 fix（状态流转 Resolved/Closed）的问题不在待办，需用 `fix-db list` 或按 issId 查询。
-```
+脚本已输出 `## 问题编排 (<范围> 共 N 条)` 表格，直接展示给用户。补充说明：
+- 待办列表只含未 fix 问题；已 fix（状态流转 Resolved/Closed）的问题不在待办
+- fix-db 有记录的问题显示处理进度；无记录为未登记
 
 ### 已处理问题查询（不在待办中）
 

@@ -171,7 +171,8 @@ git pull
 ├── README.md                    # 本文件
 ├── setup.py                     # 跨平台设置脚本 (check/install/uninstall, Python 3.9+)
 ├── setup.sh                     # Unix 便捷入口 (exec python3 setup.py)
-├── fix-db.py                    # 问题修复数据库命令 (list/query/stats/add/update)
+├── fix-db.py                    # 问题修复数据库命令
+├── mai-issue-query.py           # 问题查询脚本(直连 mi-adt API, 零 LLM 上下文) (list/query/stats/add/update)
 ├── fix-db/                      # 修复数据库数据 (每问题一 md + 派生 index.md)
 ├── .env-status.json             # 环境检查结果 (setup.py check 生成, 工作流门禁依据)
 ├── skills/
