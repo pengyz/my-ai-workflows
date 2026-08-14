@@ -33,6 +33,16 @@ if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
     echo -e "${GREEN}检测到 .claude/skills 目录${NC}"
 fi
 
+# 检测全局 skills 目录（OpenCode/Codex）
+if [ -d "$HOME/.codex/skills" ]; then
+    SKILLS_DIRS+=("$HOME/.codex/skills")
+    echo -e "${GREEN}检测到 ~/.codex/skills 目录 (OpenCode/Codex 全局)${NC}"
+fi
+if [ -d "$HOME/.config/opencode/skills" ]; then
+    SKILLS_DIRS+=("$HOME/.config/opencode/skills")
+    echo -e "${GREEN}检测到 ~/.config/opencode/skills 目录 (OpenCode 全局)${NC}"
+fi
+
 if [ ${#SKILLS_DIRS[@]} -eq 0 ]; then
     # 询问用户要创建哪个目录
     echo -e "${YELLOW}未找到 skills 目录，请选择创建位置:${NC}"
