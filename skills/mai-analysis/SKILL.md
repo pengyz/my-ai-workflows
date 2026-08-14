@@ -35,6 +35,26 @@ description: |
 
 同时拉取问题单**全部评论**（`M_pageOverallComment` / `M_getCommentList`）——供 Step 3 门禁 A3 核查。
 
+**1.0 已有定性结论检查（LLM 判定，有则跳过分析）**：
+
+阅读该单**全部信息**——issueDescription、全部评论、exReasonAnalysis、exNextPlan、rootCause、issueRootReason、changeId——由 **LLM 综合判定**是否已有**有效**的根因定性结论：
+
+| 判定 | 依据 |
+|------|------|
+| ✅ 已有有效定性 | 明确根因 + 有证据/分析支撑 + **未被推翻**（无 QA 质疑/无重新打开/无反驳评论） |
+| ❌ 无定性 | 无任何根因分析 |
+| ❌ 定性无效 | QA 已推翻 / 评论质疑 / 被后续讨论否定 / 只有猜测无证据 / 结论存疑待定 |
+
+> 注意：字段有值 ≠ 有效。用户不一定按规则更新（exReasonAnalysis 可能为空或模糊），且即使有根因，QA 可能已推翻——**必须 LLM 读评论判断"当前是否仍成立"**，不能机械匹配字段。
+
+**判定 ✅ 已有有效定性 → 不分析**：
+- 展示已有定性结论内容给用户
+- 返回该单的 **IPD 链接**（`https://ipd.mioffice.cn/.../item/<id>`）供用户确认
+- **跳过后续分析/审查/上传**，标记状态 `skip: 已有有效结论`
+- 若用户仍要求重新分析（对结论存疑），才进入 Step 2
+
+**判定 ❌（无定性 / 定性无效）→ 继续分析**，进入 Step 2。
+
 **1.1 查询修复数据库状态**（定位 WF_ROOT 见环境门禁）：
 ```bash
 python <WF_ROOT>/fix-db.py query <issId>
