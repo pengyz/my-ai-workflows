@@ -43,10 +43,20 @@ def load_mcp_config() -> dict:
             d = json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
+        # 顶层 mcpServers / mcp
         for key in ("mcpServers", "mcp"):
             ms = d.get(key) or {}
             if "mi-adt" in ms:
                 return ms["mi-adt"]
+        # 项目级配置: Claude Code 把 MCP 放在 projects.<path>.mcpServers 下
+        projects = d.get("projects") or {}
+        for proj in projects.values():
+            if not isinstance(proj, dict):
+                continue
+            for key in ("mcpServers", "mcp"):
+                ms = proj.get(key) or {}
+                if "mi-adt" in ms:
+                    return ms["mi-adt"]
     sys.exit("✗ 未找到 mi-adt MCP 配置 (检查 ~/.claude.json 或 opencode 配置)")
 
 
@@ -161,7 +171,7 @@ def fetch_all(client: McpClient, filters: list, page_size: int = 100, max_pages:
 def fixdb_status(iss_id: str) -> dict:
     try:
         r = subprocess.run([sys.executable, str(SCRIPT_DIR / "fix-db.py"), "query", iss_id],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
         if "issId:" not in r.stdout:
             return {"found": False}
         front = {}

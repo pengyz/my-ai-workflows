@@ -1,0 +1,58 @@
+【根因定谳 + 完整证据链（可复核最终版）】
+
+结论：PC 端 miclaw 经 A2A 结构化分解模式将"搜索'团建合影'图片"任务派发手机，手机受理并回传"相册中无匹配结果"。根因 A（主）：PC 端任务派发载荷 contextHint 检索意图弱化且对手机空结果无兜底校验，直接采信告知用户；根因 B（协同，待补拉验证）：手机端 worker 该次相册检索为空或执行异常（与并发任务/检索条件相关）。
+
+以下每条证据给出日志文件路径 + 行号 + 原文摘录，可按路径复核。
+
+【证据 1】失败任务 1655-1 派发载荷（检索意图弱化）
+文件：超级小爱-logs-20260814-151918.zip → agentteam/398bbbff-260814-151655-1/task-status.json L9/L13
+原文："description": "搜索名叫'团建合影'的图片"
+原文："contextHint": "搜索并返回文件候选"
+说明：contextHint 仅泛化为"搜索并返回文件候选"，丢失"图片/相册"检索范围限定。
+
+【证据 2】同日成功样本 9bfc2459（对照）
+文件：超级小爱-logs-20260814-151918.zip → agentteam/9bfc2459-260814-150749-1/task-status.json L13/L18
+原文："contextHint": "用户想在手机上搜索名为'团建合影'的图片文件"
+原文（结果）："在本机搜索到 15 张名为'团建合影'的图片文件（含 .jpg、.png、.gif）…" + 15 个 miclawFile 文件明细
+说明：同一台手机、同一主题，contextHint 含"图片文件"限定即成功返回 15 张；一成一败核心差异在 PC 端派发载荷。
+
+【证据 3】PC 端派发与受理记录
+文件：超级小爱-logs-20260814-151918.zip → xiaomi-logs/agent.log L80741-80747
+原文：15:16:55.574 DeviceChat resolved targetDevice (E150Cq6WTZdRO3KB, Xiaomi 17 Ultra)
+原文：15:16:55.575 Fast path bypass skipped by structured decomposition mode
+原文：15:16:55.576 GroupTask:1655-1 Nested task directory created
+原文：15:16:55.729 Subtask receipt confirmed (taskId=398bbbff-260814-151655-1, subtask=mkc59dqu-0)
+
+【证据 4】手机端受理并执行（回传链 6 条，main.log base64 解码）
+文件：超级小爱-logs-20260814-151918.zip → xiaomi-logs/main.log（payload 解码，fromContinuityDevice=F0F3C17D 即手机）
+L22530-22531（15:17:06.101）：status-update working，taskId=398bbbff-260814-151655-1/mkc59dqu-0
+L22660-22661（15:17:10.252）：thinking "The request is to search for images named '团建合影' (team building group photo). Let me search the gallery for this."
+L22927-22928（15:17:21.182）：status-update working 心跳
+L23816-23817（15:17:34.987）：artifact-update，parts text="没有找到名为'团建合影'的图片，相册中无匹配结果。"，finalState=completed，sendAt=2026-08-14T07:17:30.360Z
+L23912-23913（15:17:30.438）：thinking "The search returned no results. I need to report this to the requester."
+说明：任务确达手机并被受理：手机识别出要搜相册（L22661），执行后回传"没有找到"（L23817）；手机端声称检索无结果（L23913）。
+
+【证据 5】PC 端无兜底校验，直接采信
+文件：超级小爱-logs-20260814-151918.zip → xiaomi-logs/main.log L23857-23865
+原文：15:17:34.992 [A2AGateway] artifact-update handler called { taskId: 398bbbff-…/mkc59dqu-0, metadata: { finalState: 'completed', humanReadableResult: '没有找到名为"团建合影"的图片，相册中无匹配结果。' } }
+说明：PC 仅作为接收方落盘该结果，无重试、无 PC 本地对照搜索（对比 PC 本地 LocalSearchTool 可搜到 8 张）。
+
+【证据 6】文件存在性与链路可成功（排除"手机没这文件/链路坏了"）
+14:54:03 手机→PC 任务 msslctpf（超级小爱-logs zip → agentteam/msslctpf-a8c63a4b/subtask-0.json）：PC worker 找到 8 个"团建合影"图片回传手机。
+PC 本地搜索：agent.log L74504-74512（14:54:09 LocalSearchTool keyword="团建合影" fileType=image results=8）；L77527-77563（15:07:26 results=8）。
+15:07:49 PC→手机 9bfc2459：手机返回 15 张（见证据 2）。
+设备在线：main.log L22892 F0F3C17D sameAccount=1 online=true；interconnect-devices.log L150-165。
+
+【问题定界】
+主责（根因 A）：PC 端搜索端 miclaw/ContinuityApp 的 A2A 任务派发载荷（contextHint 检索意图弱化）与结果处理链路（空结果无兜底）。
+次责/协同（根因 B）：手机端 worker 该次检索为空或执行异常；抓包无手机 ContinuityApp worker 执行日志（gallery.log 仅 80B），"该次为何为空"待补拉手机端 worker 日志最终确认。
+
+【修复方案建议】
+1. agentInstruction 模板对齐成功样本：跨设备搜索任务 contextHint 必须携带明确检索范围（文件类型/目录/关键词来源），不得为"搜索并返回文件候选"。
+2. PC 端空结果兜底：worker 回传"未找到"时要求回传搜索工具调用证据（query+result count）、触发 PC 本地对照或提示重试。
+3. 手机端 worker 增加搜索执行日志（检索条件、结果数），供跨端对账。
+4. 手机端 A2A 任务并发排队，避免 worker 会话串扰（该时段与"找压缩包"201c89 并行）。
+5. 修复后重跑"三方PC搜索手机搜'团建合影'"，期望返回手机相册实际结果（15:07 曾成功返回 15 张）。
+
+【审查通过记录】
+A1 根因定性复核：通过（首轮 58/100 打回 → v3 复审 86/100）；A2 日志信息利用率：通过；A3 IPD 评论核查：通过（上传前零评论、首次定性确认）。

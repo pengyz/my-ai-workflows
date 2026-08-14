@@ -1,0 +1,20 @@
+<p><b>【根因分析最终结论（源码级复核版）】</b></p>
+<p><b>确证事实</b>：</p>
+<p>1. 任务到达手机并被受理：手机（F0F3C17D）回传 working 状态链 6 条，taskId=398bbbff-260814-151655-1/mkc59dqu-0（main.log L22530-22531/L22660-22661/L22927/L23816/L23912，base64 解码）。</p>
+<p>2. 手机执行了搜索流程：15:17:10.252 thinking "The request is to search for images named '团建合影'... Let me search the gallery for this."（main.log L22661）。</p>
+<p>3. 手机返回空结果：15:17:34.987 artifact-update "没有找到名为'团建合影'的图片，相册中无匹配结果。"，finalState=completed（main.log L23816-23817）。</p>
+<p>4. PC 端无兜底校验：15:17:34.992 [A2AGateway] artifact-update handler 仅接收落盘，无重试、无 PC 本地对照搜索（PC 本地 LocalSearchTool 可搜到 8 张），直接采信并告知用户（main.log L23857-23865）。</p>
+<p>5. 链路可成功、文件存在：同日 15:07:49 同一手机成功返回 15 张"团建合影"（9bfc2459）；14:54:03 手机→PC 成功 8 张（msslctpf）；设备在线（F0F3C17D sameAccount=1）。</p>
+<p><b>手机端 LLM 实际收到的指令（源码级确认，osbot 仓库）</b>：</p>
+<p>PC 端 SendTaskToDeviceTool.kt:166 提取 instruction/contextHint → RemoteTaskClient.kt:186-187 写入 A2A 协议 metadata（META_AGENT_INSTRUCTION/META_CONTEXT_HINT）→ 手机端 GroupTaskReceiver.kt:143/172 提取 description（=Part.Text=instruction）、agentInstruction、contextHint → DeviceAgentBridge.kt:443-489 拼接 userText：system-reminder（角色约束）+ instruction 主干（"搜索名叫'团建合影'的图片"，含"图片"）+ [Context] contextHint（"搜索并返回文件候选"）。</p>
+<p><b>结论（修正定责）</b>：</p>
+<p>1. <b>主责（确证）</b>：PC 端"空结果无兜底校验直接采信"——worker 回传"未找到"时未要求搜索执行证据、未做本地对照、未重试。</p>
+<p>2. <b>载荷缺陷（真实但非充分因果）</b>：1655-1 contextHint="搜索并返回文件候选" 检索意图弱化（对比成功样本 9bfc2459 "用户想在手机上搜索名为团建合影的图片文件"），手机 LLM 可见（[Context] 拼接），但 instruction 主干含"图片"，手机仍识别到搜相册（L22661）——故不构成失败充分原因。</p>
+<p>3. <b>关键待验证（根因 B，升级为待定主责方向）</b>：手机端执行了检索但返回空（L23913 "The search returned no results"），具体原因（检索条件构造/相册索引/与 201c89 并发串扰/worker 执行异常）在现有日志与源码中均无法闭合，<b>必须补拉手机端 ContinuityApp worker 执行日志（含相册搜索工具调用记录）与 PC→手机载荷明文后定谳</b>。</p>
+<p><b>修复方案建议</b>：</p>
+<p>1. PC 端空结果兜底（主）：worker 回传"未找到"时要求回传搜索执行证据（query+result count）、触发 PC 本地对照或提示重试。</p>
+<p>2. 跨设备搜索任务载荷规范化（辅）：统一生成含明确检索范围（文件类型/目录/关键词）的指令模板，对齐成功样本 9bfc2459；SendTaskToDeviceTool.buildFinalContextHint 不应透传弱化 contextHint。</p>
+<p>3. 补拉手机端 worker 执行日志与 PC→手机载荷明文（关键前置）：确认手机端检索为何为空，再最终定责。</p>
+<p>4. 手机端 A2A 任务并发排队，避免 worker 会话串扰（该时段与"找压缩包"201c89 并行）。</p>
+<p><b>审查通过记录</b>：</p>
+<p>A1 根因定性复核：通过（58→86/100，双端对应+源码级复核后修正）；A2 日志信息利用率：通过；A3 IPD 评论核查：通过（上传前零评论、首次定性确认）。</p>

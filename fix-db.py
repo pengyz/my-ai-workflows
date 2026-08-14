@@ -67,7 +67,7 @@ def _locked(target: Path, fn):
     with target.open("a+", encoding="utf-8") as f:
         _lock_file(f)
         try:
-            return fn()
+            return fn(f)
         finally:
             _unlock_file(f)
 
@@ -120,7 +120,7 @@ def add_issue(iss_id: str, title: str, conclusion: str, status: str, typ: str) -
         "- timeline:",
         f"  - {now_short()} {status} 创建记录",
     ]
-    _locked(path, lambda: path.write_text("\n".join(lines) + "\n", encoding="utf-8"))
+    _locked(path, lambda f: (f.seek(0), f.truncate(), f.write("\n".join(lines) + "\n")))
     print(f"✓ 已创建 {iss_id} (type={typ}, status={status})")
     _rebuild_index()
 
@@ -131,8 +131,9 @@ def update_issue(iss_id: str, fields: dict, note: str, status: str) -> None:
         print(f"✗ {iss_id} 不存在 (先 add)")
         sys.exit(1)
 
-    def _do() -> None:
-        data = parse_entry(path.read_text(encoding="utf-8"))
+    def _do(f) -> None:
+        f.seek(0)
+        data = parse_entry(f.read())
         front, timeline = data["front"], data["timeline"]
         for k, v in fields.items():
             if k not in FIELD_KEYS:
@@ -152,7 +153,9 @@ def update_issue(iss_id: str, fields: dict, note: str, status: str) -> None:
             out.append(f"- {k}: {front.get(k, '')}")
         out += ["", "- timeline:"]
         out += [f"  - {t}" for t in timeline]
-        path.write_text("\n".join(out) + "\n", encoding="utf-8")
+        f.seek(0)
+        f.truncate()
+        f.write("\n".join(out) + "\n")
 
     _locked(path, _do)
     print(f"✓ 已更新 {iss_id}" + (f" (status={status})" if status else ""))
@@ -222,20 +225,22 @@ def stats() -> None:
 
 
 def _rebuild_index() -> None:
-    def _do() -> None:
+    def _do(f) -> None:
         lines = ["# IPD 修复数据库索引", "", f"生成时间: {now_short()}", "",
                  "| issId | 标题 | 状态 | 修复 MR | 合入 | 更新时间 |",
                  "|---|---|---|---|---|---|"]
         counts = {s: 0 for s in STATUSES}
         for iss_id, data in iter_entries():
-            f = data["front"]
-            counts[f.get("status", "")] = counts.get(f.get("status", ""), 0) + 1
-            lines.append(f"| {iss_id} | {f.get('title','')} | {f.get('status','')} | "
-                         f"{f.get('mr','') or '-'} | {f.get('merge_status','pending')} | {f.get('updated_at','')} |")
+            f2 = data["front"]
+            counts[f2.get("status", "")] = counts.get(f2.get("status", ""), 0) + 1
+            lines.append(f"| {iss_id} | {f2.get('title','')} | {f2.get('status','')} | "
+                         f"{f2.get('mr','') or '-'} | {f2.get('merge_status','pending')} | {f2.get('updated_at','')} |")
         lines.append("")
         summary = " | ".join(f"{s}={counts.get(s,0)}" for s in STATUSES if counts.get(s))
         lines.append(f"统计: 共 {sum(counts.values())} 条 | {summary}")
-        INDEX_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        f.seek(0)
+        f.truncate()
+        f.write("\n".join(lines) + "\n")
 
     _locked(INDEX_FILE, _do)
 

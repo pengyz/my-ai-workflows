@@ -1,0 +1,9 @@
+<p><b>【根因表述修正（复核后最终版）】</b></p>
+<p>复核手机端回传链后，对 01:27 评论中的根因表述作一处精确修正，其余证据与结论不变。</p>
+<p><b>修正点：contextHint 弱化由"因果"降级为"强相关非充分因果"</b></p>
+<p>手机端 main.log L22661（15:17:10.252）解码显示 worker 实际理解为："The request is to search for images named '团建合影'... Let me search the gallery for this."——即手机 worker 从任务上下文（description 含"图片"）仍正确识别出要搜相册并执行了检索（L23913 声称 "The search returned no results"）。因此"contextHint 弱化 → 手机不知道搜什么 → 没找到"不构成充分因果。</p>
+<p><b>最终根因定性：</b></p>
+<p><b>主责（确证）</b>：PC 端对手机回传的空结果<b>无兜底校验</b>——未要求 worker 回传搜索执行证据（query+result count）、无 PC 本地对照搜索（PC 本地 LocalSearchTool 可搜到 8 张）、无重试确认，直接采信"没有找到"并告知用户。</p>
+<p><b>载荷缺陷（强相关非充分因果）</b>：1655-1 contextHint="搜索并返回文件候选"检索意图弱化，与成功样本 9bfc2459 的"用户想在手机上搜索名为团建合影的图片文件"对比明确，是失败样本的指令差异点，但非唯一/充分原因。</p>
+<p><b>关键待验证（根因 B）</b>：手机端该次检索为何返回空——与"找压缩包"201c89 并发串扰？检索条件/索引异常？worker 执行异常？因抓包无手机端 ContinuityApp worker 执行日志（gallery.log 仅 80B），需补拉该日志最终确认。</p>
+<p>其余内容（证据 1-6、问题定界、修复方案建议、审查通过记录）维持 01:27 评论不变。</p>

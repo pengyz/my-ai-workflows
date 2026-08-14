@@ -158,6 +158,7 @@ def harness_dirs() -> list[tuple[str, Path]]:
         ("Claude Code", home / ".claude" / "skills"),
         ("Codex", home / ".codex" / "skills"),
         ("OpenCode", home / ".config" / "opencode" / "skills"),
+        ("DSH (用户级)", home / ".agents" / "skills"),
     ]
     try:
         proc = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=10)
