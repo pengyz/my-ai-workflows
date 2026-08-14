@@ -85,12 +85,12 @@ IPD 评论的 `content` 字段支持两种格式：
 
 **不要混用**：`<p>` 和 `hardBreak` 选择其一。
 
-### 3. qiushiding 的实际格式（参考标准）
+### 3. 专业分析的实际格式示例
 
 ```json
 [{
   "type": "text",
-  "text": "<p><b>【Opus 5 双向交叉校验｜结论等级：实证（触发源与机制）】</b></p><p><b>结论</b>：<b>PAD 的 MiTalk IM 会话断了 99 秒</b>，那 30 秒里 PAD 根本没收到 file notify；文件从未到达，而对话仍报「已发到 PAD」。<b>与标题所写「本地接收后手动删除」之间未找到因果链。</b></p><p><b>根因（实证）</b>　A2A 走 MiTalk IM，消息按 seq 严格递增。把 seq→msgId（发送方 epoch ms）解码后与 Mac 事件逐条对上：<br><code>seq 2000593</code> msgId 21:34:09.682 → PAD <b>21:34:09.905</b>（正常 223ms）<br>...</p>"
+  "text": "<p><b>【双向交叉校验｜结论等级：实证】</b></p><p><b>结论</b>：<b>核心问题一句话描述</b></p><p><b>根因（实证）</b></p><p>日志证据：<br><code>HH:MM:SS.mmm Component: 关键日志</code><br><code>HH:MM:SS.mmm Component: 错误信息</code></p><p>代码证据：<br>定位到 <code>File.kt:123</code><br>逻辑说明...</p><p><b>问题定界</b></p><p>主责：<b>[Android/PC]</b><br>依据：<br>1. 日志 <code>file.log:123</code> 显示 ...<br>2. 代码逻辑 ...</p><p><b>修复方案</b></p><p>1. 修复点1<br>2. 修复点2</p><p><b>验证结果</b></p><p>✓ 编译通过<br>✓ 测试通过</p><p>MR: <url><br>Commit: <code>hash</code></p>"
 }]
 ```
 
@@ -99,6 +99,7 @@ IPD 评论的 `content` 字段支持两种格式：
 - ✅ 使用 `<p>` 分段，`<b>` 加粗，`<code>` 标记代码
 - ✅ 在段落内使用 `<br>` 换行（不是 hardBreak）
 - ✅ 无额外的 hardBreak 节点
+- ✅ 结构清晰：结论 → 根因 → 定界 → 修复 → 验证
 
 ### 示例 1：简单格式化文本
 
