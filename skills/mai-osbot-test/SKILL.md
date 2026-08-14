@@ -1,5 +1,5 @@
 ---
-name: osbot-test
+name: mai-osbot-test
 description: |
   OSBot 统一测试编排。按场景路由到正确的测试引擎（osbot-eval 单端行为 / smoke 提交门禁 /
   双端 RC-XDEV / JS CLI 单测 / jvm 离线），先做环境门禁（含 Linux 可行性说明）再执行，
@@ -8,11 +8,11 @@ description: |
   legacy 提示：app:shell / app:headless 已过时，主 app 为 sidekick-ui。
 ---
 
-# OSBot 测试编排 (osbot-test)
+# OSBot 测试编排 (mai-osbot-test)
 
 统一测试入口。**只做路由/门禁/归一，不重复实现引擎**——具体执行委托给 osbot 项目内的引擎 skill（osbot-eval / osbot-eval-remote-control / osbot-eval-cross-device）。
 
-**前置**：在 osbot 仓库目录内运行（或设置 `OSBOT_PATH` 环境变量指向 osbot 仓库，见 `env-doctor`）。
+**前置**：在 osbot 仓库目录内运行（或设置 `OSBOT_PATH` 环境变量指向 osbot 仓库，见 `mai-env-doctor`）。
 
 ## 测试基础设施地图
 
@@ -41,9 +41,9 @@ description: |
 > **多设备/给任意在线设备发消息**：先按 `sidekick-talk` 的「设备发现与寻址」章节建立 **设备名-suid-在线状态-adb device id 四元组图谱**（`adb devices -l` + 每台设备查询「我有哪些云端在线设备」），再以 `ANDROID_SERIAL` 寻址目标设备发消息。
 | trace 查看 | osbot-trace-viz | 按该 skill |
 
-## 环境门禁（执行前必做，复用 env-doctor 模式）
+## 环境门禁（执行前必做，复用 mai-env-doctor 模式）
 
-按路由结果检查目标引擎的前置条件，输出 ✅/⚠️/❌，❌ 时给出修复动作（详见 `env-doctor` skill）：
+按路由结果检查目标引擎的前置条件，输出 ✅/⚠️/❌，❌ 时给出修复动作（详见 `mai-env-doctor` skill）：
 
 1. **通用**：`python3`（≥3.10）、`PyYAML`、`adb` 可用
 2. **单端 smoke/eval（sidekick-session / sidekick-ui）**：adb 在线设备 ≥1、`com.miui.voiceassist` debug APK 已装（`setup.py check` 可查 osbot 路径）
@@ -101,7 +101,7 @@ description: |
 
 ## 依赖
 
-- 环境: `env-doctor` / `setup.py` - 环境门禁与检查
+- 环境: `mai-env-doctor` / `setup.py` - 环境门禁与检查
 - 项目 skill: `osbot-eval` - 单端 eval 引擎（路由目标）
 - 项目 skill: `osbot-eval-remote-control` / `osbot-eval-cross-device` - 双端引擎（路由目标）
 - 项目 skill: `osbot-mr-preflight` / `osbot-trace-viz` - MR 门禁对接

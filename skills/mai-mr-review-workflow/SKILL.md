@@ -1,5 +1,5 @@
 ---
-name: mr-review-workflow
+name: mai-mr-review-workflow
 description: 完整的 MR review 工作流：代码审查 → 多轮验证 → 自动化测试 → 问题修复 → 关联 IPD → 生成 MR 描述 → 提交
 ---
 
@@ -11,7 +11,7 @@ description: 完整的 MR review 工作流：代码审查 → 多轮验证 → �
 
 - "准备提交 MR"
 - "完成 MR review"
-- "/mr-review-workflow"
+- "/mai-mr-review-workflow"
 - "review 完成后提交 MR"
 
 ## 工作流程
@@ -27,7 +27,7 @@ description: 完整的 MR review 工作流：代码审查 → 多轮验证 → �
    WF_ROOT="${MY_AI_WORKFLOWS:-}"
    if [ -z "$WF_ROOT" ]; then
      for d in "$HOME/.config/opencode/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$PWD/.agents/skills" "$PWD/.claude/skills"; do
-       L="$(readlink -f "$d/mr-review-workflow" 2>/dev/null || true)"
+       L="$(readlink -f "$d/mai-mr-review-workflow" 2>/dev/null || true)"
        if [ -n "$L" ] && [ -f "$L/SKILL.md" ]; then
          WF_ROOT="$(cd "$(dirname "$L")/.." && pwd)"
          break
@@ -43,7 +43,7 @@ description: 完整的 MR review 工作流：代码审查 → 多轮验证 → �
    $WF_ROOT = $env:MY_AI_WORKFLOWS
    if (-not $WF_ROOT) {
      foreach ($d in @("$HOME\.config\opencode\skills", "$HOME\.claude\skills", "$HOME\.codex\skills", "$PWD\.agents\skills", "$PWD\.claude\skills")) {
-       $item = Get-Item "$d\mr-review-workflow" -ErrorAction SilentlyContinue
+       $item = Get-Item "$d\mai-mr-review-workflow" -ErrorAction SilentlyContinue
        if ($item -and $item.Target) {
          $WF_ROOT = Split-Path (Split-Path $item.Target)
          break
@@ -220,10 +220,10 @@ Closes ISS-xxx
 
 ### Step 6: 编译验证
 
-最后一次完整编译验证（路径以 env-doctor Step 0 探测到的实际 osbot 路径为准）：
+最后一次完整编译验证（路径以 mai-env-doctor Step 0 探测到的实际 osbot 路径为准）：
 
 ```bash
-cd <env-doctor 探测到的 osbot 路径>
+cd <mai-env-doctor 探测到的 osbot 路径>
 ./scripts/package-ui.sh sidekick-ui
 ```
 
@@ -347,7 +347,7 @@ content=$(jq -nc --arg mr_url "$MR_URL" --arg mr_num "$MR_NUM" --arg passed "$PA
 
 **环境启发规则**：任何依赖调用失败时，先判断是否环境问题（glab 未认证、MCP 未配置、路径不对）。是 → 提示修复指引 + 运行 `setup.py check` 定位（路径按 Step 0 定位结果），修复后重试一次；瞬时错误直接重试一次，不重复尝试第三次。
 
-- **环境类错误（CLI/MCP/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断（如 MCP 连通性）可调用 `env-doctor` skill
+- **环境类错误（CLI/MCP/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断（如 MCP 连通性）可调用 `mai-env-doctor` skill
 - **Code Review 失败**: 检查变更范围，确保规则文件存在
 - **测试失败**: 分析失败原因，区分新引入 vs 已存在问题
 - **MR 创建失败**: 若为 glab 环境问题按上条（`glab auth status` 验证）；否则检查 token 权限，重试一次
@@ -356,7 +356,7 @@ content=$(jq -nc --arg mr_url "$MR_URL" --arg mr_num "$MR_NUM" --arg passed "$PA
 ## 依赖
 
 - 环境: `setup.py` (Unix 便捷入口 setup.sh) - 一次性环境检查与安装（Step 0 门禁依据，仓库根定位见 Step 0）
-- Skill: `env-doctor` - 运行时深度诊断（可选，出错时用）
+- Skill: `mai-env-doctor` - 运行时深度诊断（可选，出错时用）
 - 项目 skill: `osbot-review` - 代码审查
 - 项目 skill: `osbot-mr-preflight` - MR 描述生成
 - 项目 skill: `osbot-eval` - 测试用例执行

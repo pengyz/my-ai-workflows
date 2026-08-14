@@ -1,5 +1,5 @@
 ---
-name: env-doctor
+name: mai-env-doctor
 description: |
   my-ai-workflows 运行时环境深度诊断。检查 mi-adt MCP 连通性（setup.py 无法覆盖的项）、
   glab CLI、osbot 项目环境、项目 skills、符号链接，输出 ✅/⚠️/❌ 检查表并给出修复动作。
@@ -7,7 +7,7 @@ description: |
   触发词："环境检查"、"检查环境"、"doctor"、"环境诊断"、"环境自检"。
 ---
 
-# 环境诊断 (env-doctor)
+# 环境诊断 (mai-env-doctor)
 
 **安装期检查**：一次性环境检查与安装请运行 `setup.py check`（Python 跨平台实现，含状态文件写入）。
 **本 skill 定位**：运行时深度诊断——尤其覆盖 setup.py 做不到的项（MCP 连通性实测），以及工作流运行中依赖调用失败时的定位。工作流不强制每次调用本 skill。
@@ -206,7 +206,7 @@ readlink -f ~/.claude/skills/ipd-fix-workflow 2>/dev/null
 | 工具/工作流 | 使用时机 | 必需检查项 | 可选检查项 |
 |------------|---------|-----------|-----------|
 | setup.py check | 安装期一次性 | 全部 A-E（bash 版，不含 MCP 连通性实测） | - |
-| env-doctor | 运行时出错时 | A（含连通性实测）、B、C、D | E |
+| mai-env-doctor | 运行时出错时 | A（含连通性实测）、B、C、D | E |
 | ipd-fix-workflow | 出错时引用 | A、C | D（osbot-eval，不跑测试可跳过） |
-| mr-review-workflow | 出错时引用 | B、C、D | A（mi-adt，不关联 IPD 可跳过） |
-| mr-pick-workflow | 出错时引用 | B、C、D（osbot-eval） | - |
+| mai-mr-review-workflow | 出错时引用 | B、C、D | A（mi-adt，不关联 IPD 可跳过） |
+| mai-mr-pick-workflow | 出错时引用 | B、C、D（osbot-eval） | - |

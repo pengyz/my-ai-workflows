@@ -4,27 +4,47 @@
 
 ## 工作流列表
 
-### 1. IPD 根因分析 (ipd-analysis)
+### 1. 问题根因分析 (mai-analysis)
 获取问题单 → 日志全量分析 → 根因定位 → 三道子 agent 独立审查门禁（根因定性复核 / 日志信息利用率 / IPD 评论核查）→ 上传根因结论到 IPD + 本地留档。
 
-触发：`/ipd-analysis` 或 "分析 IPD 问题 ISS-xxx"
+触发：`/mai-analysis` 或 "分析 IPD 问题 ISS-xxx"
 
-### 2. IPD 问题修复工作流 (ipd-fix-workflow)
-基于 ipd-analysis 的完整结论执行修复：结论门禁（双查）→ 修复方案评审 → TDD 用例集（osbot-test 编排）→ 修复代码 → 编译 + 充分跑用例 → 独立复核 → 提交 → 更新 IPD 状态。
+### 2. 问题修复工作流 (mai-fix-workflow)
+基于 mai-analysis 的完整结论执行修复：结论门禁（双查）→ 修复方案评审 → TDD 用例集（mai-osbot-test 编排）→ 修复代码 → 编译 + 充分跑用例 → 独立复核 → 提交 → 更新 IPD 状态。
 
-**强制前置**：必须由 ipd-analysis 给出过完整结论，无结论拒绝开始。
+**强制前置**：必须由 mai-analysis 给出过完整结论，无结论拒绝开始。
 
-触发：`/ipd-fix-workflow` 或 "修复 IPD 问题 ISS-xxx"
+触发：`/mai-fix-workflow` 或 "修复 IPD 问题 ISS-xxx"
 
-### 3. MR Review 工作流 (mr-review-workflow)
+### 3. 功能开发工作流 (mai-implement-workflow)
+功能/新特性开发（非 bugfix）：需求确认门禁（目标/边界/验收标准/影响面）→ 方案评审 → TDD 用例集 → 实现 → 编译 + 充分跑用例 → 独立复核 → 提交 MR → 更新状态。**无需 mai-analysis 分析结论**。
+
+触发：`/mai-implement-workflow` 或 "开发功能 X"
+
+### 4. 问题修复数据库 (mai-fix-db)
+
+记录已 fix/正在 fix 的问题：IPD 单、分析结论、修复 MR、MR 合入状态。markdown 维护（每问题一文件 + 派生索引），支持多 session 并行写（写隔离 + flock 锁）。
+
+```bash
+python ~/my-ai-workflows/fix-db.py list [--days N] [--status X]   # 查询所有 / 最近 N 天修复进度
+python ~/my-ai-workflows/fix-db.py query <issId>                  # 查单问题状态
+python ~/my-ai-workflows/fix-db.py stats                          # 统计
+python ~/my-ai-workflows/fix-db.py add <issId> --title "..."      # 登记（mai-analysis 自动）
+python ~/my-ai-workflows/fix-db.py update <issId> -f key=val -t "说明" --status X  # 更新（自动追加时间线+重建索引）
+```
+
+状态机：`analyzing → conclusion_uploaded → fixing → mr_created → merged → closed`。
+`mai-analysis` / `mai-fix-workflow` 已内嵌自动读写。
+
+### 5. MR Review 工作流 (mai-mr-review-workflow)
 完整的 MR review 流程：代码审查 → 自动化测试 → 问题修复 → 生成 MR 描述 → 关联 IPD → 提交 MR。
 
-触发：`/mr-review-workflow` 或 "准备提交 MR"
+触发：`/mai-mr-review-workflow` 或 "准备提交 MR"
 
-### 3. Git Cherry-Pick 工作流 (mr-pick-workflow)
+### 6. Git Cherry-Pick 工作流 (mai-mr-pick-workflow)
 按 MR 维度进行 cherry-pick，每个 MR 独立验证，最后子 agent 复核一致性。
 
-触发：`/mr-pick-workflow` 或 "cherry-pick MR !123 !456"
+触发：`/mai-mr-pick-workflow` 或 "cherry-pick MR !123 !456"
 
 ## 安装
 
@@ -99,13 +119,13 @@ ln -s ~/my-ai-workflows/skills/* .claude/skills/
 
 ```bash
 # Claude Code / Kiro
-/ipd-fix-workflow
+/mai-fix-workflow
 
 # OpenCode
-$ipd-fix-workflow
+$mai-fix-workflow
 
 # Codex
-调用 ipd-fix-workflow skill
+调用 mai-fix-workflow skill
 ```
 
 ## 跨环境同步
@@ -145,14 +165,16 @@ git pull
 ├── README.md                    # 本文件
 ├── setup.py                     # 跨平台设置脚本 (check/install/uninstall, Python 3.9+)
 ├── setup.sh                     # Unix 便捷入口 (exec python3 setup.py)
+├── fix-db.py                    # 问题修复数据库命令 (list/query/stats/add/update)
+├── fix-db/                      # 修复数据库数据 (每问题一 md + 派生 index.md)
 ├── .env-status.json             # 环境检查结果 (setup.py check 生成, 工作流门禁依据)
 ├── skills/
-│   ├── env-doctor/             # 运行时环境深度诊断 (MCP 连通性实测等)
-│   ├── ipd-analysis/           # IPD 根因分析 + 结论上传 (三道审查门禁)
-│   ├── ipd-fix-workflow/       # IPD 问题修复 (需先有 ipd-analysis 完整结论)
-│   ├── mr-review-workflow/     # MR review 工作流
-│   ├── mr-pick-workflow/       # Cherry-pick 工作流
-│   ├── osbot-test/             # OSBot 统一测试编排 (场景路由)
+│   ├── mai-env-doctor/             # 运行时环境深度诊断 (MCP 连通性实测等)
+│   ├── mai-analysis/           # IPD 根因分析 + 结论上传 (三道审查门禁)
+│   ├── mai-fix-workflow/       # IPD 问题修复 (需先有 mai-analysis 完整结论)
+│   ├── mai-mr-review-workflow/     # MR review 工作流
+│   ├── mai-mr-pick-workflow/       # Cherry-pick 工作流
+│   ├── mai-osbot-test/             # OSBot 统一测试编排 (场景路由)
 │   └── .git/                   # Git 版本控制
 ```
 
@@ -170,7 +192,7 @@ git pull
 以及 CLI 工具：
 - `glab` - GitLab API 操作
 
-环境就绪性由 `setup.sh check` 一次性检查（结果写入 `.env-status.json`）；运行时的 MCP 连通性等深度诊断由 `env-doctor` skill 负责。
+环境就绪性由 `setup.sh check` 一次性检查（结果写入 `.env-status.json`）；运行时的 MCP 连通性等深度诊断由 `mai-env-doctor` skill 负责。
 
 ## 自定义
 
@@ -190,7 +212,7 @@ git pull
 
 **问题：工作流运行时依赖调用失败（MCP/glab/路径）**
 - 运行 `setup.py check` 获取检查表和修复指引
-- 深度诊断（MCP 连通性实测等）：调用 `env-doctor` skill
+- 深度诊断（MCP 连通性实测等）：调用 `mai-env-doctor` skill
 
 **问题：工作流调用项目 skill 失败**
 - 确保在正确的项目目录（如 osbot）

@@ -1,5 +1,5 @@
 ---
-name: mr-pick-workflow
+name: mai-mr-pick-workflow
 description: 按 MR 维度进行 cherry-pick 工作流：逐个 MR pick → 编译验证 → 测试 → 子 agent 独立复核一致性
 ---
 
@@ -11,7 +11,7 @@ description: 按 MR 维度进行 cherry-pick 工作流：逐个 MR pick → 编�
 
 - "cherry-pick MR !123 !456"
 - "pick MRs !123 !456 到当前分支"
-- "/mr-pick-workflow !123 !456"
+- "/mai-mr-pick-workflow !123 !456"
 - "回流 MR !123 !456"
 
 ## 工作流程
@@ -27,7 +27,7 @@ description: 按 MR 维度进行 cherry-pick 工作流：逐个 MR pick → 编�
    WF_ROOT="${MY_AI_WORKFLOWS:-}"
    if [ -z "$WF_ROOT" ]; then
      for d in "$HOME/.config/opencode/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$PWD/.agents/skills" "$PWD/.claude/skills"; do
-       L="$(readlink -f "$d/mr-pick-workflow" 2>/dev/null || true)"
+       L="$(readlink -f "$d/mai-mr-pick-workflow" 2>/dev/null || true)"
        if [ -n "$L" ] && [ -f "$L/SKILL.md" ]; then
          WF_ROOT="$(cd "$(dirname "$L")/.." && pwd)"
          break
@@ -43,7 +43,7 @@ description: 按 MR 维度进行 cherry-pick 工作流：逐个 MR pick → 编�
    $WF_ROOT = $env:MY_AI_WORKFLOWS
    if (-not $WF_ROOT) {
      foreach ($d in @("$HOME\.config\opencode\skills", "$HOME\.claude\skills", "$HOME\.codex\skills", "$PWD\.agents\skills", "$PWD\.claude\skills")) {
-       $item = Get-Item "$d\mr-pick-workflow" -ErrorAction SilentlyContinue
+       $item = Get-Item "$d\mai-mr-pick-workflow" -ErrorAction SilentlyContinue
        if ($item -and $item.Target) {
          $WF_ROOT = Split-Path (Split-Path $item.Target)
          break
@@ -429,14 +429,27 @@ glab mr create \
   --target-branch <target>
 ```
 
+**回流 MR 创建后——回填修复数据库**（被 pick 的 MR 均来自 fix-db 产出，双向关联）：
+
+对**每个被 pick 的源 MR**，反查 fix-db 关联的 IPD 单并回填回流 MR：
+
+```bash
+# 1. 反查源 MR 关联的 issId（WF_ROOT 定位见 Step 0）
+python <WF_ROOT>/fix-db.py list --mr !123
+# 2. 对每个命中的 issId 回填回流 MR
+python <WF_ROOT>/fix-db.py update <issId> -f backport_mr=!<回流MR编号> -t "回流至 !<回流MR编号>"
+```
+
+> **多个 MR 统一提交场景**：一个回流 MR 关联多个源 MR（多个 IPD 单）→ 对每个源 MR 重复上述反查+回填，使回流 MR 反向关联所有被 pick 的 IPD 单（双向可查）。
+
 MR 描述模板：
 ```markdown
 # 回流 MRs
 
 回流以下 MRs 到 <target-branch>:
 
-- !123 - <title>
-- !456 - <title>
+- !123 - <title> (IPD: ISS-xxx)
+- !456 - <title> (IPD: ISS-yyy)
 
 ## 验证结果
 
@@ -453,7 +466,7 @@ MR 描述模板：
 
 **环境启发规则**：任何依赖调用失败时，先判断是否环境问题（glab 未认证、路径不对）。是 → 提示修复指引 + 运行 `setup.py check` 定位（路径按 Step 0 定位结果），修复后重试一次；瞬时错误直接重试一次，不重复尝试第三次。
 
-- **环境类错误（CLI/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断可调用 `env-doctor` skill
+- **环境类错误（CLI/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断可调用 `mai-env-doctor` skill
 - **MR 不存在**: 检查 MR 编号，跳过该 MR
 - **Cherry-pick 冲突**: 提供冲突分析和解决建议
 - **编译失败**: 回滚该 MR，继续或停止
@@ -470,8 +483,9 @@ MR 描述模板：
 
 ## 依赖
 
-- 环境: `setup.py` (Unix 便捷入口 setup.sh) - 一次性环境检查与安装（Step 0 门禁依据，仓库根定位见 Step 0）
-- Skill: `env-doctor` - 运行时深度诊断（可选，出错时用）
+- 环境: `setup.py` - 一次性环境检查与安装（Step 0 门禁依据，仓库根定位见 Step 0）
+- Skill: `mai-env-doctor` - 运行时深度诊断（可选，出错时用）
+- 数据库: `fix-db.py` - 回流 MR 与 IPD 单双向关联（Step 7 回填 backport_mr）
 - CLI: `glab` - GitLab API 操作
 - 项目 skill: `osbot-eval` - 测试用例执行
 - 子 agent: 独立复核一致性（通过 Agent 工具）

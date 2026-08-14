@@ -1,11 +1,11 @@
 ---
-name: ipd-analysis
+name: mai-analysis
 description: |
   IPD 根因分析 + 结论上传。获取问题单 → 下载并全量分析日志 → 根因定位 →
   三道子 agent 独立审查门禁（A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查）
-  全部通过后上传根因结论到 IPD 评论 + 本地留档，产出供 ipd-fix-workflow 使用的完整结论。
+  全部通过后上传根因结论到 IPD 评论 + 本地留档，产出供 mai-fix-workflow 使用的完整结论。
   触发词："分析 IPD 问题"、"根因分析"、"日志分析"、"定界"、"结论上传"、"分析 ISS-xxx"。
-  注意：本 skill 只做分析定谳，修复由 ipd-fix-workflow 负责（需先有本 skill 的完整结论）。
+  注意：本 skill 只做分析定谳，修复由 mai-fix-workflow 负责（需先有本 skill 的完整结论）。
 ---
 
 # IPD 根因分析 + 结论上传
@@ -21,11 +21,11 @@ description: |
 
 - "分析 IPD 问题 ISS-xxx"
 - "根因分析 ISS-xxx"
-- "/ipd-analysis ISS-xxx"
+- "/mai-analysis ISS-xxx"
 
 ## 前置
 
-环境门禁（复用 `env-doctor` / `setup.py`）：`mi-adt` MCP 可用（查询/评论）、osbot 项目路径可用（对照代码）。
+环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 可用（查询/评论）、osbot 项目路径可用（对照代码）。
 
 ## 工作流程
 
@@ -34,6 +34,16 @@ description: |
 调用 `mi-adt` `M_issueQuery`（filters: issId EQ），提取：issueTitle / issueDescription / issuePriority / issueStatus / issueAssigneeId / exHandleAction / issueTestComponent / attachmentJson。
 
 同时拉取问题单**全部评论**（`M_pageOverallComment` / `M_getCommentList`）——供 Step 3 门禁 A3 核查。
+
+**1.1 查询修复数据库状态**（定位 WF_ROOT 见环境门禁）：
+```bash
+python <WF_ROOT>/fix-db.py query <issId>
+```
+- 已有记录（analyzing/conclusion_uploaded/fixing/mr_created/merged）→ 展示历史状态,若已有结论则提示用户是否重复分析;若已 merged/closed 提示问题可能已修复
+- 无记录 → 登记本次分析（拿到 issueTitle 后）：
+  ```bash
+  python <WF_ROOT>/fix-db.py add <issId> --title "<issueTitle>" --status analyzing
+  ```
 
 展示给用户确认。
 
@@ -118,14 +128,19 @@ description: |
 - 关联文件: 分析报告 / 审查报告路径
 ```
 
-**4.2 上传根因评论到 IPD**（`M_saveComment`,HTML 格式）：
+**4.2 更新修复数据库**：
+```bash
+python <WF_ROOT>/fix-db.py update <issId> --status conclusion_uploaded -f conclusion="<一句话根因>" -t "根因定谳上传 IPD"
+```
+
+**4.3 上传根因评论到 IPD**（`M_saveComment`,HTML 格式）：
 ```
 【根因定谳 + 分析结论】结论一句话 / 根因实证(日志+代码证据) / 问题定界(主责) /
 问题清单(全部问题) / 修复方案建议 / 审查通过记录
 ```
 HTML 格式要点：整个分析作为单个 text 节点、`<p>` 分段、`<br>` 换行、`<b>` 粗体、`<code>` 代码。
 
-**4.3 告知用户**：结论已上传 + 本地留档路径 + 可进入 `ipd-fix-workflow` 开始修复。
+**4.4 告知用户**：结论已上传 + 本地留档路径 + 可进入 `mai-fix-workflow` 开始修复。
 
 ## 输出
 
@@ -133,20 +148,21 @@ HTML 格式要点：整个分析作为单个 text 节点、`<p>` 分段、`<br>`
 - 审查报告: `.claude/ipd-conclusions/<issId>-review-{A1,A2,A3}.md`
 - IPD 根因评论已上传
 
-## 与 ipd-fix-workflow 的关系
+## 与 mai-fix-workflow 的关系
 
-`ipd-fix-workflow`（修复）**强制要求**本 skill 的完整结论（IPD 评论 + 本地文件双查），无结论拒绝开始。因此本 skill 必须完成 Step 3 全部审查 + Step 4 上传留档。
+`mai-fix-workflow`（修复）**强制要求**本 skill 的完整结论（IPD 评论 + 本地文件双查），无结论拒绝开始。因此本 skill 必须完成 Step 3 全部审查 + Step 4 上传留档。
 
 ## 错误处理
 
-- **IPD 查询失败**: `setup.py check` / env-doctor 定位 MCP 问题,重试一次
+- **IPD 查询失败**: `setup.py check` / mai-env-doctor 定位 MCP 问题,重试一次
 - **日志下载失败**: 检查 fdsId 有效性,逐个重试
 - **审查打回**: 按审查报告修改后重新提交,不豁免则必须通过
 - **上传失败**: 检查 M_ saveComment 参数（HTML 单 text 节点）,重试
 
 ## 依赖
 
-- 环境: `env-doctor` / `setup.py` - 环境门禁
+- 环境: `mai-env-doctor` / `setup.py` - 环境门禁
+- 数据库: `fix-db.py` - 修复数据库（Step 1 查询登记,Step 4 写结论）
 - MCP: `mi-adt` - 查询/评论
 - 子 agent: 三道审查门禁（独立复核）
 - 本地目录: `.claude/ipd-conclusions/` - 结论与审查报告留档

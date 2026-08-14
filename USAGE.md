@@ -28,10 +28,10 @@ python setup.py install # 安装 (junction 软链, 免管理员)
 
 ```bash
 # 检查符号链接
-ls -la .agents/skills/ | grep -E "(env-doctor|ipd-fix|mr-review|mr-pick)"
+ls -la .agents/skills/ | grep -E "(mai-env-doctor|ipd-fix|mr-review|mr-pick)"
 
 # 或
-ls -la .claude/skills/ | grep -E "(env-doctor|ipd-fix|mr-review|mr-pick)"
+ls -la .claude/skills/ | grep -E "(mai-env-doctor|ipd-fix|mr-review|mr-pick)"
 ```
 
 应该看到四个符号链接指向 `~/my-ai-workflows/skills/`。
@@ -52,11 +52,11 @@ python $HOME\my-ai-workflows\setup.py check
 
 ## 使用方法
 
-### 场景 1：IPD 根因分析（ipd-analysis）
+### 场景 1：IPD 根因分析（mai-analysis）
 
 **触发方式**：
 - "分析 IPD 问题 ISS-202608-00051339A"
-- "/ipd-analysis ISS-202608-00051339A"
+- "/mai-analysis ISS-202608-00051339A"
 
 **工作流程**：
 1. 获取问题信息（含全部 IPD 评论）
@@ -65,18 +65,18 @@ python $HOME\my-ai-workflows\setup.py check
 4. 审查全过后上传根因结论到 IPD + 本地留档 `.claude/ipd-conclusions/<issId>.md`
 5. 告知可进入修复工作流
 
-### 场景 2：IPD 问题修复（ipd-fix-workflow）
+### 场景 2：IPD 问题修复（mai-fix-workflow）
 
 **触发方式**：
 - "修复 IPD 问题 ISS-202608-00051339A"
-- "/ipd-fix-workflow ISS-202608-00051339A"
+- "/mai-fix-workflow ISS-202608-00051339A"
 
-**前置（强制）**：必须已由 `ipd-analysis` 给出过完整结论（IPD 评论根因 + 本地结论文件双查），无结论拒绝开始。
+**前置（强制）**：必须已由 `mai-analysis` 给出过完整结论（IPD 评论根因 + 本地结论文件双查），无结论拒绝开始。
 
 **工作流程**：
 1. 结论门禁双查 → 读取结论
 2. 制定修复方案 + 子 agent 方案评审（门禁 F1）
-3. TDD 用例集（osbot-test 编排，行为类进 eval/cases）
+3. TDD 用例集（mai-osbot-test 编排，行为类进 eval/cases）
 4. 修复代码 → 编译验证 → 充分跑用例（新增+回归+冒烟 100% PASS）
 5. 子 agent 独立复核（门禁 F3）
 6. 提交代码 → 更新 IPD 状态为 Resolved + 上传修复评论
@@ -110,7 +110,7 @@ IPD 状态已更新为 Resolved
 
 **触发方式**：
 - "准备提交 MR"
-- "/mr-review-workflow"
+- "/mai-mr-review-workflow"
 - "review 完成后提交 MR"
 
 **工作流程**：
@@ -160,11 +160,32 @@ AI: [获取 IPD 信息 → 生成 MR 描述 → 编译 → 创建 MR → 更新 
 ✓ IPD 已更新为 Resolved，进展：已提交 MR !5678
 ```
 
-### 场景 3：Cherry-Pick MRs
+### 场景 3：查询修复数据库（fix-db）
+
+**触发方式**：
+- "查询最近的问题修复进度"
+- "fix-db list"
+- "ISS-xxx 现在什么状态"
+
+**命令**：
+```bash
+# 所有 / 最近 7 天的问题修复与进度
+python ~/my-ai-workflows/fix-db.py list --days 7
+
+# 单问题状态（分析问题前先查这个）
+python ~/my-ai-workflows/fix-db.py query ISS-xxx
+
+# 统计（总数/按状态/MR 合入率）
+python ~/my-ai-workflows/fix-db.py stats
+```
+
+> `mai-analysis` 分析开始/结论上传时自动登记更新，`mai-fix-workflow` 修复中/提交/合入时自动更新——手动查询是只读操作，无需担心并发写。
+
+### 场景 4：Cherry-Pick MRs
 
 **触发方式**：
 - "cherry-pick MR !123 !456"
-- "/mr-pick-workflow !123 !456"
+- "/mai-mr-pick-workflow !123 !456"
 - "回流 MR !123 !456"
 
 **工作流程**：
@@ -252,24 +273,24 @@ AI: [创建回流 MR]
 
 ### Claude Code / Kiro
 ```bash
-/ipd-fix-workflow ISS-xxx
-/mr-review-workflow
-/mr-pick-workflow !123 !456
+/mai-fix-workflow ISS-xxx
+/mai-mr-review-workflow
+/mai-mr-pick-workflow !123 !456
 ```
 
 ### OpenCode
 ```bash
-$ipd-fix-workflow ISS-xxx
-$mr-review-workflow
-$mr-pick-workflow !123 !456
+$mai-fix-workflow ISS-xxx
+$mai-mr-review-workflow
+$mai-mr-pick-workflow !123 !456
 ```
 
 ### Codex
 直接说：
 ```
-调用 ipd-fix-workflow 修复 ISS-xxx
-使用 mr-review-workflow 准备提交 MR
-运行 mr-pick-workflow cherry-pick !123 !456
+调用 mai-fix-workflow 修复 ISS-xxx
+使用 mai-mr-review-workflow 准备提交 MR
+运行 mai-mr-pick-workflow cherry-pick !123 !456
 ```
 
 ## 多环境同步
@@ -317,7 +338,7 @@ git pull
 编辑对应的 SKILL.md 文件：
 
 ```bash
-cd ~/my-ai-workflows/skills/ipd-fix-workflow
+cd ~/my-ai-workflows/skills/mai-fix-workflow
 vim SKILL.md
 
 # 例如：调整默认测试策略
@@ -361,9 +382,9 @@ cd /path/to/project
 
 **检查符号链接**：
 ```bash
-ls -la .agents/skills/ipd-fix-workflow
+ls -la .agents/skills/mai-fix-workflow
 # 或
-ls -la .claude/skills/ipd-fix-workflow
+ls -la .claude/skills/mai-fix-workflow
 ```
 
 **重新安装**：
@@ -418,19 +439,19 @@ glab auth login
 
 在对话中明确告诉 AI：
 ```
-你: /mr-review-workflow，跳过代码审查，直接运行测试
+你: /mai-mr-review-workflow，跳过代码审查，直接运行测试
 ```
 
 ### 3. 组合使用工作流
 
 ```
-你: 先用 ipd-fix-workflow 修复 ISS-xxx，完成后自动用 mr-review-workflow 提交 MR
+你: 先用 mai-fix-workflow 修复 ISS-xxx，完成后自动用 mai-mr-review-workflow 提交 MR
 ```
 
 ### 4. 查看工作流内容
 
 ```bash
-cat ~/my-ai-workflows/skills/ipd-fix-workflow/SKILL.md
+cat ~/my-ai-workflows/skills/mai-fix-workflow/SKILL.md
 ```
 
 了解工作流的详细步骤和可配置项。
