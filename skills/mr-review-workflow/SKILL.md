@@ -224,14 +224,35 @@ MR 标题格式：
 }
 ```
 
-添加评论关联 MR：
-```
+**添加富文本评论关联 MR**：
+
+```bash
+# 构造富文本内容
+content=$(jq -nc --arg mr_url "$MR_URL" --arg mr_num "$MR_NUM" --arg passed "$PASSED" --arg total "$TOTAL" '[
+  {"type":"text","text":"<b>【MR 已提交】</b>"},
+  {"type":"hardBreak"},
+  {"type":"text","text":("MR: " + $mr_url)},
+  {"type":"hardBreak"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"<b>Self-Eval 结果</b>"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"✓ Code Review: 通过"},
+  {"type":"hardBreak"},
+  {"type":"text","text":("✓ 测试: " + $passed + "/" + $total + " passed")},
+  {"type":"hardBreak"},
+  {"type":"text","text":"✓ 编译: 通过"}
+]')
+
+# 调用 MCP
 调用 mcp__mi-adt__M_saveComment，传入参数：
 {
+  "userName": "pengyaozong",
   "issId": "ISS-xxx",
-  "content": "已提交 MR: <MR-URL>\n\nSelf-Eval: <测试结果>"
+  "content": "$content"
 }
 ```
+
+富文本格式详见：`~/my-ai-workflows/docs/ipd-rich-text-format.md`
 
 ### Step 9: 生成完成报告
 

@@ -124,14 +124,78 @@ Commit message 格式要求：
 }
 ```
 
-如果需要添加评论：
+**添加富文本评论**（推荐格式）：
+
 ```
 调用 mcp__mi-adt__M_saveComment，传入参数：
 {
+  "userName": "pengyaozong",
   "issId": "ISS-xxx",
-  "content": "问题已修复\n\n修复说明：...\n\nCommit: <hash>\n测试结果：..."
+  "content": "[构造的富文本JSON数组]"
 }
 ```
+
+**富文本格式**（参考 `~/my-ai-workflows/docs/ipd-rich-text-format.md`）：
+
+评论使用 JSON 数组，包含不同类型的节点：
+
+```json
+[
+  {"type": "text", "text": "<b>【修复完成】</b>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "<b>根因</b>：<定位的问题>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "<b>修复</b>：<修复说明>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "Commit: <code><commit-hash></code>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "MR: <MR-URL>"},
+  {"type": "hardBreak"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "<b>验证结果</b>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "✓ 编译通过"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "✓ 测试通过 (<passed>/<total>)"}
+]
+```
+
+**节点类型**：
+- `{"type": "text", "text": "内容"}` - 文本（支持 HTML：`<b>`, `<code>`, `<p>`）
+- `{"type": "hardBreak"}` - 换行
+- `{"type": "mention", "id": "username", "label": "显示名", "enableNotification": true}` - @某人
+
+**构造示例**（使用 jq）：
+
+```bash
+content=$(jq -nc --arg commit "$commit_hash" --arg mr "$mr_url" '[
+  {"type":"text","text":"<b>【修复完成】</b>"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"<b>根因</b>：XXX"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"<b>修复</b>：YYY"},
+  {"type":"hardBreak"},
+  {"type":"text","text":("Commit: <code>" + $commit + "</code>")},
+  {"type":"hardBreak"},
+  {"type":"text","text":("MR: " + $mr)},
+  {"type":"hardBreak"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"<b>验证结果</b>"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"✓ 编译通过"},
+  {"type":"hardBreak"},
+  {"type":"text","text":"✓ 测试通过"}
+]')
+```
+
+**纯文本格式**（简单场景）：
+
+如果内容简单，也可以直接传纯文本字符串：
+```
+content="问题已修复\n\nCommit: abc123\n测试通过"
+```
+
+但**推荐使用富文本**，格式更清晰、可读性更好。
 
 ### Step 8: 生成修复报告
 
