@@ -112,13 +112,17 @@ def extract_issues(result: dict) -> list:
 
 
 # ---------- 查询 ----------
+# IPD 状态中英文混合, 终止状态必须全部排除 (否则已关闭/已解决混入, 返回量爆炸)
+CLOSED_STATES = ["Closed", "Verified", "Resolved", "已终止", "Termination", "已解决", "已关闭", "已失效"]
+
+
 def build_filters(scope: str, user: str, args) -> list:
     filters = []
     if scope == "待办":
         filters.append({"key": "issueAssigneeId", "operator": "EQ", "value": [user]})
-        filters.append({"key": "issueStatus", "operator": "NOT_IN", "value": ["Closed", "Verified"]})
+        filters.append({"key": "issueStatus", "operator": "NOT_IN", "value": CLOSED_STATES})
     elif scope == "未关闭":
-        filters.append({"key": "issueStatus", "operator": "NOT_IN", "value": ["Closed", "Verified"]})
+        filters.append({"key": "issueStatus", "operator": "NOT_IN", "value": CLOSED_STATES})
     filters.append({"key": "deleted", "operator": "EQ", "value": ["0"]})
     if args.priority:
         filters.append({"key": "issuePriority", "operator": "EQ", "value": [args.priority]})
