@@ -31,7 +31,7 @@ STATUS_FILE = Path(os.environ.get("MY_AI_WORKFLOWS_STATUS", str(SCRIPT_DIR / ".e
 STATUS_TTL_DAYS = 7
 IS_WINDOWS = os.name == "nt"
 
-WORKFLOWS = ["env-doctor", "ipd-fix-workflow", "mr-review-workflow", "mr-pick-workflow"]
+WORKFLOWS = ["env-doctor", "ipd-analysis", "ipd-fix-workflow", "mr-review-workflow", "mr-pick-workflow", "osbot-test"]
 PROJECT_SKILLS = ["osbot-eval", "osbot-review", "osbot-mr-preflight", "osbot-trace-viz"]
 
 GREEN, RED, YELLOW, BLUE, NC = "\033[0;32m", "\033[0;31m", "\033[1;33m", "\033[0;34m", "\033[0m"

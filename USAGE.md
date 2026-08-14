@@ -52,21 +52,34 @@ python $HOME\my-ai-workflows\setup.py check
 
 ## 使用方法
 
-### 场景 1：修复 IPD 问题
+### 场景 1：IPD 根因分析（ipd-analysis）
+
+**触发方式**：
+- "分析 IPD 问题 ISS-202608-00051339A"
+- "/ipd-analysis ISS-202608-00051339A"
+
+**工作流程**：
+1. 获取问题信息（含全部 IPD 评论）
+2. 下载并全量分析日志（时间线/定界/证据链）
+3. 三道子 agent 独立审查门禁：A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查
+4. 审查全过后上传根因结论到 IPD + 本地留档 `.claude/ipd-conclusions/<issId>.md`
+5. 告知可进入修复工作流
+
+### 场景 2：IPD 问题修复（ipd-fix-workflow）
 
 **触发方式**：
 - "修复 IPD 问题 ISS-202608-00051339A"
 - "/ipd-fix-workflow ISS-202608-00051339A"
 
+**前置（强制）**：必须已由 `ipd-analysis` 给出过完整结论（IPD 评论根因 + 本地结论文件双查），无结论拒绝开始。
+
 **工作流程**：
-1. AI 从 IPD 获取问题信息并展示
-2. 分析问题，定位相关代码
-3. 与你讨论修复方案
-4. 修复代码
-5. 自动编译验证（`./scripts/package-ui.sh sidekick-ui`）
-6. 运行测试（根据需要补 eval case）
-7. 提交代码（符合 commit 规范）
-8. 更新 IPD 状态为 "Resolved"
+1. 结论门禁双查 → 读取结论
+2. 制定修复方案 + 子 agent 方案评审（门禁 F1）
+3. TDD 用例集（osbot-test 编排，行为类进 eval/cases）
+4. 修复代码 → 编译验证 → 充分跑用例（新增+回归+冒烟 100% PASS）
+5. 子 agent 独立复核（门禁 F3）
+6. 提交代码 → 更新 IPD 状态为 Resolved + 上传修复评论
 
 **示例对话**：
 ```

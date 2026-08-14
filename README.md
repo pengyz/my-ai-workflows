@@ -4,12 +4,19 @@
 
 ## 工作流列表
 
-### 1. IPD 问题修复工作流 (ipd-fix-workflow)
-完整的 IPD 问题修复流程：从问题单获取信息 → 修复代码 → 编译验证 → 测试 → 提交 → 更新 IPD 状态。
+### 1. IPD 根因分析 (ipd-analysis)
+获取问题单 → 日志全量分析 → 根因定位 → 三道子 agent 独立审查门禁（根因定性复核 / 日志信息利用率 / IPD 评论核查）→ 上传根因结论到 IPD + 本地留档。
+
+触发：`/ipd-analysis` 或 "分析 IPD 问题 ISS-xxx"
+
+### 2. IPD 问题修复工作流 (ipd-fix-workflow)
+基于 ipd-analysis 的完整结论执行修复：结论门禁（双查）→ 修复方案评审 → TDD 用例集（osbot-test 编排）→ 修复代码 → 编译 + 充分跑用例 → 独立复核 → 提交 → 更新 IPD 状态。
+
+**强制前置**：必须由 ipd-analysis 给出过完整结论，无结论拒绝开始。
 
 触发：`/ipd-fix-workflow` 或 "修复 IPD 问题 ISS-xxx"
 
-### 2. MR Review 工作流 (mr-review-workflow)
+### 3. MR Review 工作流 (mr-review-workflow)
 完整的 MR review 流程：代码审查 → 自动化测试 → 问题修复 → 生成 MR 描述 → 关联 IPD → 提交 MR。
 
 触发：`/mr-review-workflow` 或 "准备提交 MR"
@@ -141,13 +148,12 @@ git pull
 ├── .env-status.json             # 环境检查结果 (setup.py check 生成, 工作流门禁依据)
 ├── skills/
 │   ├── env-doctor/             # 运行时环境深度诊断 (MCP 连通性实测等)
-│   ├── ipd-fix-workflow/       # IPD 问题修复工作流
-│   │   └── SKILL.md
+│   ├── ipd-analysis/           # IPD 根因分析 + 结论上传 (三道审查门禁)
+│   ├── ipd-fix-workflow/       # IPD 问题修复 (需先有 ipd-analysis 完整结论)
 │   ├── mr-review-workflow/     # MR review 工作流
-│   │   └── SKILL.md
-│   └── mr-pick-workflow/       # Cherry-pick 工作流
-│       └── SKILL.md
-└── .git/                       # Git 版本控制
+│   ├── mr-pick-workflow/       # Cherry-pick 工作流
+│   ├── osbot-test/             # OSBot 统一测试编排 (场景路由)
+│   └── .git/                   # Git 版本控制
 ```
 
 ## 依赖
