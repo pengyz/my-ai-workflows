@@ -21,31 +21,55 @@
 
 ## 安装
 
-### 方式一：自动安装（推荐）
+### 一键全局安装（推荐）
+
+在**任意目录**运行安装脚本，自动扫描所有 AI Harness 并安装到全局目录：
 
 ```bash
-cd ~/my-ai-workflows
-./install.sh
+cd ~  # 或任意目录
+~/my-ai-workflows/install.sh
 ```
 
-脚本会自动检测当前项目的 skills 目录（`.agents/skills` 或 `.claude/skills`），并创建符号链接。
+安装脚本会：
+1. 自动扫描所有 AI Harness 的 skills 目录
+2. 显示将要安装的工作流和目标目录
+3. 用户确认后一次性安装到所有检测到的目录
 
-### 方式二：手动安装
+**支持的 Harness**：
+- ✅ Claude Code (`~/.claude/skills`)
+- ✅ Codex (`~/.codex/skills`)
+- ✅ OpenCode (`~/.config/opencode/skills`)
+- ✅ 项目级（如果在项目中运行）
 
-在你的项目目录中创建符号链接：
+**安装后效果**：一次安装，所有项目可用！
+
+### 首次设置
 
 ```bash
+# 1. 克隆仓库到 home 目录
+cd ~
+git clone https://github.com/pengyz/my-ai-workflows.git
+
+# 2. 运行安装脚本
+~/my-ai-workflows/install.sh
+```
+
+**完成！** 现在在任何项目中都可以使用这些工作流。
+
+### 手动安装（可选）
+
+如果需要手动创建符号链接：
+
+```bash
+# 全局安装（推荐）
+ln -s ~/my-ai-workflows/skills/* ~/.claude/skills/
+ln -s ~/my-ai-workflows/skills/* ~/.codex/skills/
+ln -s ~/my-ai-workflows/skills/* ~/.config/opencode/skills/
+
+# 或项目级安装
 cd /path/to/your/project
-
-# 如果项目使用 .agents/skills
-ln -s ~/my-ai-workflows/skills/ipd-fix-workflow .agents/skills/
-ln -s ~/my-ai-workflows/skills/mr-review-workflow .agents/skills/
-ln -s ~/my-ai-workflows/skills/mr-pick-workflow .agents/skills/
-
-# 如果项目使用 .claude/skills
-ln -s ~/my-ai-workflows/skills/ipd-fix-workflow .claude/skills/
-ln -s ~/my-ai-workflows/skills/mr-review-workflow .claude/skills/
-ln -s ~/my-ai-workflows/skills/mr-pick-workflow .claude/skills/
+ln -s ~/my-ai-workflows/skills/* .agents/skills/
+ln -s ~/my-ai-workflows/skills/* .claude/skills/
 ```
 
 ## 使用
@@ -65,27 +89,33 @@ $ipd-fix-workflow
 
 ## 跨环境同步
 
-1. **首次设置（在一台机器上）**
-   ```bash
-   cd ~/my-ai-workflows
-   git remote add origin <你的私有 git 仓库>
-   git push -u origin main
-   ```
+### 首次设置（在一台机器上）
+```bash
+cd ~/my-ai-workflows
+git remote add origin https://github.com/your-username/my-ai-workflows.git
+git push -u origin main
+```
 
-2. **在其他机器同步**
-   ```bash
-   cd ~
-   git clone <你的私有 git 仓库> my-ai-workflows
-   cd my-ai-workflows
-   ./install.sh  # 在各个项目目录安装
-   ```
+### 在其他机器同步
+```bash
+# 1. 克隆仓库
+cd ~
+git clone https://github.com/your-username/my-ai-workflows.git
 
-3. **更新工作流**
-   ```bash
-   cd ~/my-ai-workflows
-   git pull
-   # 符号链接自动生效，无需重新安装
-   ```
+# 2. 运行安装脚本（自动安装到所有 harness）
+~/my-ai-workflows/install.sh
+```
+
+**完成！** 所有工作流立即在该机器的所有项目中可用。
+
+### 更新工作流
+```bash
+cd ~/my-ai-workflows
+git pull
+
+# 符号链接自动生效，无需重新安装
+# 如果有新增工作流，重新运行 install.sh
+```
 
 ## 目录结构
 
