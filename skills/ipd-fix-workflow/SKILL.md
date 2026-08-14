@@ -441,41 +441,54 @@ Commit message 格式要求：
 }
 ```
 
-**添加专业的根因分析评论**（使用富文本格式）：
-
-使用**单个 text 节点**包含整个分析（专业风格）：
+**添加根因分析评论**：
 
 ```bash
-# 构造富文本内容（关键：整个分析作为一个 text 节点）
-content=$(jq -nc --arg analysis "$(cat <<'EOF'
+# 构造 HTML 格式的评论内容
+content=$(cat <<'EOF'
 <p><b>【根因定谳 + 修复已提交】</b></p>
 <p><b>结论</b>：<一句话根因结论></p>
 <p><b>根因（实证）</b></p>
 <p>日志证据：<br>
-<code>HH:MM:SS.mmm [Component] 关键日志内容</code><br>
-<code>HH:MM:SS.mmm [Component] 错误或超时信息</code></p>
+<code>HH:MM:SS.mmm Component: 关键日志</code><br>
+<code>HH:MM:SS.mmm Component: 错误信息</code></p>
 <p>代码证据：<br>
-定位到 <code>FileName.kt:123</code><br>
-<代码逻辑说明，为什么会产生这个日志></p>
+定位到 <code>File.kt:123</code><br>
+逻辑说明</p>
 <p><b>问题定界</b></p>
-<p>主责：<b>[Android/PC/MiLink]</b><br>
+<p>主责：<b>Android/PC/MiLink</b><br>
 依据：<br>
-1. 日志 <code>file.log:123</code> HH:MM:SS 显示 ...<br>
-2. 代码 <code>File.kt:456</code> 逻辑 ...<br>
-3. 对端日志 ...</p>
+1. 日志证据<br>
+2. 代码证据<br>
+3. 对端日志</p>
 <p><b>修复方案</b></p>
-<p>1. <修复点1><br>
-2. <修复点2></p>
+<p>1. 修复点1<br>
+2. 修复点2</p>
 <p><b>验证结果</b></p>
 <p>✓ 编译通过<br>
-✓ 测试通过 (<passed>/<total>)</p>
-<p>MR: <mr_url><br>
-Commit: <code><commit_hash></code></p>
+✓ 测试通过</p>
+<p>MR: <url><br>
+Commit: <code><hash></code></p>
 EOF
-)" '[{"type":"text","text":$analysis}]')
+)
 
 # 调用 MCP 添加评论
 调用 mcp__mi-adt__M_saveComment，传入参数：
+{
+  "userName": "pengyaozong",
+  "issId": "ISS-xxx",
+  "content": "$content"
+}
+```
+
+**格式要点**：
+- `content` 字段传 HTML 字符串（不是 JSON 数组）
+- `<p>...</p>` - 段落
+- `<br>` - 段内换行
+- `<b>...</b>` - 粗体
+- `<code>...</code>` - 代码
+
+详细格式见：`~/my-ai-workflows/docs/ipd-rich-text-format.md`
 {
   "userName": "pengyaozong",
   "issId": "ISS-xxx",
