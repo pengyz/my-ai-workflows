@@ -21,7 +21,13 @@
 
 触发：`/mai-implement-workflow` 或 "开发功能 X"
 
-### 4. 问题修复数据库 (mai-fix-db)
+### 4. 问题统一编排 (mai-issue-schedule)
+
+拉取名下 IPD 问题单（待办/未关闭/全部三种范围），按优先级/模块/状态维度过滤，关联 fix-db 输出 fix MR 链接与处理进度。待办来自 IPD（未关闭），已 fix 问题通过 fix-db 双向查询。
+
+触发：`/mai-issue-schedule` 或 "我还有哪些问题待处理" / "查 Critical 问题"
+
+### 5. 问题修复数据库 (mai-fix-db)
 
 记录已 fix/正在 fix 的问题：IPD 单、分析结论、修复 MR、MR 合入状态。markdown 维护（每问题一文件 + 派生索引），支持多 session 并行写（写隔离 + flock 锁）。
 
@@ -36,12 +42,12 @@ python ~/my-ai-workflows/fix-db.py update <issId> -f key=val -t "说明" --statu
 状态机：`analyzing → conclusion_uploaded → fixing → mr_created → merged → closed`。
 `mai-analysis` / `mai-fix-workflow` 已内嵌自动读写。
 
-### 5. MR Review 工作流 (mai-mr-review-workflow)
+### 6. MR Review 工作流 (mai-mr-review-workflow)
 完整的 MR review 流程：代码审查 → 自动化测试 → 问题修复 → 生成 MR 描述 → 关联 IPD → 提交 MR。
 
 触发：`/mai-mr-review-workflow` 或 "准备提交 MR"
 
-### 6. Git Cherry-Pick 工作流 (mai-mr-pick-workflow)
+### 7. Git Cherry-Pick 工作流 (mai-mr-pick-workflow)
 按 MR 维度进行 cherry-pick，每个 MR 独立验证，最后子 agent 复核一致性。
 
 触发：`/mai-mr-pick-workflow` 或 "cherry-pick MR !123 !456"
