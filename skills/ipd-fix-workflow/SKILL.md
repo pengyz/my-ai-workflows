@@ -15,6 +15,51 @@ description: IPD 问题修复完整工作流：获取问题信息 → 分析定�
 
 ## 工作流程
 
+### Step 0: 环境门禁（轻量，不重复全量检查）
+
+环境检查已由 `setup.py` 在安装时一次性完成。运行时只做轻量门禁：
+
+1. 定位仓库根并读状态文件（环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > 默认位置兜底）：
+
+   **Linux/macOS (bash)**：
+   ```bash
+   WF_ROOT="${MY_AI_WORKFLOWS:-}"
+   if [ -z "$WF_ROOT" ]; then
+     for d in "$HOME/.config/opencode/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$PWD/.agents/skills" "$PWD/.claude/skills"; do
+       L="$(readlink -f "$d/ipd-fix-workflow" 2>/dev/null || true)"
+       if [ -n "$L" ] && [ -f "$L/SKILL.md" ]; then
+         WF_ROOT="$(cd "$(dirname "$L")/.." && pwd)"
+         break
+       fi
+     done
+   fi
+   WF_ROOT="${WF_ROOT:-$HOME/my-ai-workflows}"
+   cat "$WF_ROOT/.env-status.json" 2>/dev/null || echo "MISSING"
+   ```
+
+   **Windows (PowerShell)**：
+   ```powershell
+   $WF_ROOT = $env:MY_AI_WORKFLOWS
+   if (-not $WF_ROOT) {
+     foreach ($d in @("$HOME\.config\opencode\skills", "$HOME\.claude\skills", "$HOME\.codex\skills", "$PWD\.agents\skills", "$PWD\.claude\skills")) {
+       $item = Get-Item "$d\ipd-fix-workflow" -ErrorAction SilentlyContinue
+       if ($item -and $item.Target) {
+         $WF_ROOT = Split-Path (Split-Path $item.Target)
+         break
+       }
+     }
+   }
+   if (-not $WF_ROOT) { $WF_ROOT = "$HOME\my-ai-workflows" }
+   if (Test-Path "$WF_ROOT\.env-status.json") { Get-Content "$WF_ROOT\.env-status.json" } else { "MISSING" }
+   ```
+2. 判定（不做任何工具探测）：
+   - `required_ok=true` 且 `checked_at` 未超过 `ttl_days` → 直接继续 Step 1
+   - 文件不存在 / `required_ok=false` / 已过期 → 提示用户：`请先运行 <WF_ROOT>/setup.py check (Unix 也可用 <WF_ROOT>/setup.sh check) 完成一次性环境配置`，用户确认后继续
+3. 运行中任何依赖调用失败 → 按"错误处理"章节启发式处理：报错 + 修复指引 + 提示 setup.py，不现场做全量检查
+
+**本工作流必需依赖**：`mi-adt` MCP（查询/更新问题单）、osbot 项目环境（编译）
+**可选依赖**：`osbot-eval`（测试；不跑测试可跳过）
+
 ### Step 1: 获取 IPD 问题信息
 
 使用 MCP `mi-adt` 工具获取问题详情：
@@ -376,10 +421,10 @@ PC 日志证据：[file:line] HH:MM:SS - 搜索耗时 350s
 
 ### Step 5: 编译验证
 
-使用项目标准编译命令：
+使用项目标准编译命令（路径以 env-doctor Step 0 探测到的实际 osbot 路径为准）：
 
 ```bash
-cd /home/peng/workspace/osbot
+cd <env-doctor 探测到的 osbot 路径>
 ./scripts/package-ui.sh sidekick-ui
 ```
 
@@ -488,7 +533,7 @@ EOF
 - `<b>...</b>` - 粗体
 - `<code>...</code>` - 代码
 
-详细格式见：`~/my-ai-workflows/docs/ipd-rich-text-format.md`
+详细格式见：`<WF_ROOT>/docs/ipd-rich-text-format.md`（WF_ROOT 见 Step 0 定位）
 {
   "userName": "pengyaozong",
   "issId": "ISS-xxx",
@@ -528,7 +573,7 @@ EOF
    - 修复方案
    - 验证结果
 
-详细格式说明见：`~/my-ai-workflows/docs/ipd-rich-text-format.md`
+详细格式说明见：`<WF_ROOT>/docs/ipd-rich-text-format.md`（WF_ROOT 见 Step 0 定位）
 
 ### Step 8: 生成修复报告
 
@@ -562,7 +607,10 @@ EOF
 
 ## 错误处理
 
-- **IPD 查询失败**: 检查 MCP 配置，确认问题编号正确
+**环境启发规则**：任何依赖调用失败时，先判断是否环境问题（MCP 未配置/失效、路径不对）。是 → 提示修复指引 + 运行 `setup.py check` 定位（路径按 Step 0 定位结果），修复后重试一次；瞬时错误直接重试一次，不重复尝试第三次。
+
+- **环境类错误（MCP/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断（如 MCP 连通性）可调用 `env-doctor` skill
+- **IPD 查询失败**: 若为 MCP 环境问题按上条；否则确认问题编号正确，重试一次
 - **编译失败**: 参考故障排除文档，修复后重新执行
 - **测试失败**: 分析失败原因，修复后重新测试
 - **提交失败**: 检查 commit hook，确保格式正确
@@ -576,6 +624,8 @@ EOF
 
 ## 依赖
 
+- 环境: `setup.py` (Unix 便捷入口 setup.sh) - 一次性环境检查与安装（Step 0 门禁依据，仓库根定位见 Step 0）
+- Skill: `env-doctor` - 运行时深度诊断（可选，出错时用）
 - MCP: `mi-adt` - IPD 问题追踪系统
 - 项目 skill: `osbot-eval` - 测试用例执行
 - Git 配置: commit hook 已安装

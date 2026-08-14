@@ -23,17 +23,25 @@
 
 ### 一键全局安装（推荐）
 
-在**任意目录**运行安装脚本，自动扫描所有 AI Harness 并安装到全局目录：
+在**任意目录**运行设置脚本，自动检查环境依赖并安装到所有 AI Harness：
 
 ```bash
 cd ~  # 或任意目录
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
-安装脚本会：
-1. 自动扫描所有 AI Harness 的 skills 目录
-2. 显示将要安装的工作流和目标目录
-3. 用户确认后一次性安装到所有检测到的目录
+设置脚本会：
+1. **环境检查 (check)**：检查 glab CLI、mi-adt MCP 配置、osbot 项目路径、符号链接状态，输出 ✅/⚠️/❌ 检查表
+2. **安装 (install)**：自动扫描所有 AI Harness 的 skills 目录，显示将安装的工作流，确认后安装
+
+**子命令**：
+- `setup.py check` - 仅环境检查（结果写入 `.env-status.json`，工作流运行时门禁依据）
+- `setup.py install` - 仅安装符号链接（Unix: symlink；Windows: junction，免管理员权限）
+- `setup.py uninstall` - 卸载：删除指向本仓库的符号链接（真实目录不受影响）
+
+**跨平台**：核心逻辑为 Python 实现（`setup.py`，Python 3.9+），Linux/macOS 可用 `setup.sh` 便捷入口，Windows 直接运行 `python setup.py`。
+
+**仓库根定位**：脚本使用自身位置定位仓库（支持任意 clone 位置）；也可通过环境变量 `MY_AI_WORKFLOWS` 指定仓库根。
 
 **支持的 Harness**：
 - ✅ Claude Code (`~/.claude/skills`)
@@ -50,11 +58,17 @@ cd ~  # 或任意目录
 cd ~
 git clone https://github.com/pengyz/my-ai-workflows.git
 
-# 2. 运行安装脚本
-~/my-ai-workflows/install.sh
+# 2. 运行设置脚本（检查环境 + 安装）
+# Linux/macOS
+~/my-ai-workflows/setup.sh
+# Windows (PowerShell)
+python $HOME\my-ai-workflows\setup.py
 ```
 
 **完成！** 现在在任何项目中都可以使用这些工作流。
+
+> 环境检查只需安装时做一次。工作流运行时只做轻量门禁（读 `.env-status.json`）；
+> 依赖调用失败时会提示运行 `setup.py check` 定位并修复。
 
 ### 手动安装（可选）
 
@@ -103,7 +117,7 @@ cd ~
 git clone https://github.com/your-username/my-ai-workflows.git
 
 # 2. 运行安装脚本（自动安装到所有 harness）
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
 **完成！** 所有工作流立即在该机器的所有项目中可用。
@@ -114,7 +128,7 @@ cd ~/my-ai-workflows
 git pull
 
 # 符号链接自动生效，无需重新安装
-# 如果有新增工作流，重新运行 install.sh
+# 如果有新增工作流，重新运行 setup.sh
 ```
 
 ## 目录结构
@@ -122,8 +136,11 @@ git pull
 ```
 ~/my-ai-workflows/
 ├── README.md                    # 本文件
-├── install.sh                   # 自动安装脚本
+├── setup.py                     # 跨平台设置脚本 (check/install/uninstall, Python 3.9+)
+├── setup.sh                     # Unix 便捷入口 (exec python3 setup.py)
+├── .env-status.json             # 环境检查结果 (setup.py check 生成, 工作流门禁依据)
 ├── skills/
+│   ├── env-doctor/             # 运行时环境深度诊断 (MCP 连通性实测等)
 │   ├── ipd-fix-workflow/       # IPD 问题修复工作流
 │   │   └── SKILL.md
 │   ├── mr-review-workflow/     # MR review 工作流
@@ -144,6 +161,11 @@ git pull
 以及 MCP 工具：
 - `mi-adt` - IPD 问题追踪系统
 
+以及 CLI 工具：
+- `glab` - GitLab API 操作
+
+环境就绪性由 `setup.sh check` 一次性检查（结果写入 `.env-status.json`）；运行时的 MCP 连通性等深度诊断由 `env-doctor` skill 负责。
+
 ## 自定义
 
 每个工作流的 `SKILL.md` 可以根据个人习惯调整：
@@ -158,12 +180,21 @@ git pull
 
 **问题：调用工作流时提示找不到**
 - 检查符号链接：`ls -la .agents/skills/` 或 `ls -la .claude/skills/`
-- 重新运行 `~/my-ai-workflows/install.sh`
+- 重新运行 `setup.py install`（Unix 也可用 `~/my-ai-workflows/setup.sh install`）
+
+**问题：工作流运行时依赖调用失败（MCP/glab/路径）**
+- 运行 `setup.py check` 获取检查表和修复指引
+- 深度诊断（MCP 连通性实测等）：调用 `env-doctor` skill
 
 **问题：工作流调用项目 skill 失败**
 - 确保在正确的项目目录（如 osbot）
 - 检查项目 skills 是否存在
 
 **问题：MCP 工具调用失败**
-- 检查 MCP 配置：`~/.claude/mcp.json`
+- 检查 MCP 配置：`~/.claude/mcp.json` 或 `~/.config/opencode/opencode.json`
 - 确保相关 MCP server 已启动
+
+**问题：Windows 下脚本无法运行**
+- 确认已安装 Python 3.9+：`python --version`
+- 使用 `python setup.py check/install/uninstall` 调用（不依赖 bash）
+- 符号链接安装使用 junction（免管理员权限），自动处理

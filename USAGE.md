@@ -11,20 +11,44 @@ git clone https://github.com/<你的用户名>/my-ai-workflows.git
 
 # 在项目中安装
 cd /path/to/your/project
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
+
+**Windows (PowerShell)**：不依赖 bash，直接调用 Python 版：
+
+```powershell
+cd $HOME\my-ai-workflows
+python setup.py check   # 环境检查
+python setup.py install # 安装 (junction 软链, 免管理员)
+```
+
+**卸载**：`python setup.py uninstall` 或 `~/my-ai-workflows/setup.sh uninstall`（只删除指向本仓库的链接，真实目录不受影响）
 
 ### 2. 验证安装
 
 ```bash
 # 检查符号链接
-ls -la .agents/skills/ | grep -E "(ipd-fix|mr-review|mr-pick)"
+ls -la .agents/skills/ | grep -E "(env-doctor|ipd-fix|mr-review|mr-pick)"
 
 # 或
-ls -la .claude/skills/ | grep -E "(ipd-fix|mr-review|mr-pick)"
+ls -la .claude/skills/ | grep -E "(env-doctor|ipd-fix|mr-review|mr-pick)"
 ```
 
-应该看到三个符号链接指向 `~/my-ai-workflows/skills/`。
+应该看到四个符号链接指向 `~/my-ai-workflows/skills/`。
+
+### 3. 环境检查（一次性）
+
+`setup.py` 默认会先做环境检查再安装。之后想单独检查或刷新状态文件：
+
+```bash
+# Linux/macOS
+~/my-ai-workflows/setup.sh check
+# Windows
+python $HOME\my-ai-workflows\setup.py check
+```
+
+检查 glab CLI、mi-adt MCP 配置、osbot 项目路径等，输出 ✅/⚠️/❌ 检查表。
+工作流运行时依赖失败时，也会提示运行此命令定位问题。
 
 ## 使用方法
 
@@ -253,10 +277,10 @@ git clone https://github.com/<你的用户名>/my-ai-workflows.git
 
 # 在各个项目中安装
 cd ~/project1
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 
 cd ~/project2
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
 **更新工作流**：
@@ -304,8 +328,8 @@ cd ~/my-ai-workflows/skills
 mkdir my-new-workflow
 vim my-new-workflow/SKILL.md
 
-# 编辑 install.sh，添加到 WORKFLOWS 数组
-vim ~/my-ai-workflows/install.sh
+# 编辑 setup.sh，添加到 WORKFLOWS 数组
+vim ~/my-ai-workflows/setup.sh
 
 # 提交
 cd ~/my-ai-workflows
@@ -315,7 +339,7 @@ git push
 
 # 重新安装
 cd /path/to/project
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
 ## 故障排查
@@ -331,7 +355,7 @@ ls -la .claude/skills/ipd-fix-workflow
 
 **重新安装**：
 ```bash
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
 ### 问题：工作流调用项目 skill 失败
@@ -417,7 +441,7 @@ git pull
 每次开始新项目，运行一次安装脚本：
 ```bash
 cd /path/to/new/project
-~/my-ai-workflows/install.sh
+~/my-ai-workflows/setup.sh
 ```
 
 ### 4. 团队分享（可选）

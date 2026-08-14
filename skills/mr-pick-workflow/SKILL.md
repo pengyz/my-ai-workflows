@@ -16,6 +16,50 @@ description: 按 MR 维度进行 cherry-pick 工作流：逐个 MR pick → 编�
 
 ## 工作流程
 
+### Step 0: 环境门禁（轻量，不重复全量检查）
+
+环境检查已由 `setup.py` 在安装时一次性完成。运行时只做轻量门禁：
+
+1. 定位仓库根并读状态文件（环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > 默认位置兜底）：
+
+   **Linux/macOS (bash)**：
+   ```bash
+   WF_ROOT="${MY_AI_WORKFLOWS:-}"
+   if [ -z "$WF_ROOT" ]; then
+     for d in "$HOME/.config/opencode/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$PWD/.agents/skills" "$PWD/.claude/skills"; do
+       L="$(readlink -f "$d/mr-pick-workflow" 2>/dev/null || true)"
+       if [ -n "$L" ] && [ -f "$L/SKILL.md" ]; then
+         WF_ROOT="$(cd "$(dirname "$L")/.." && pwd)"
+         break
+       fi
+     done
+   fi
+   WF_ROOT="${WF_ROOT:-$HOME/my-ai-workflows}"
+   cat "$WF_ROOT/.env-status.json" 2>/dev/null || echo "MISSING"
+   ```
+
+   **Windows (PowerShell)**：
+   ```powershell
+   $WF_ROOT = $env:MY_AI_WORKFLOWS
+   if (-not $WF_ROOT) {
+     foreach ($d in @("$HOME\.config\opencode\skills", "$HOME\.claude\skills", "$HOME\.codex\skills", "$PWD\.agents\skills", "$PWD\.claude\skills")) {
+       $item = Get-Item "$d\mr-pick-workflow" -ErrorAction SilentlyContinue
+       if ($item -and $item.Target) {
+         $WF_ROOT = Split-Path (Split-Path $item.Target)
+         break
+       }
+     }
+   }
+   if (-not $WF_ROOT) { $WF_ROOT = "$HOME\my-ai-workflows" }
+   if (Test-Path "$WF_ROOT\.env-status.json") { Get-Content "$WF_ROOT\.env-status.json" } else { "MISSING" }
+   ```
+2. 判定（不做任何工具探测）：
+   - `required_ok=true` 且 `checked_at` 未超过 `ttl_days` → 直接继续 Step 1
+   - 文件不存在 / `required_ok=false` / 已过期 → 提示用户：`请先运行 <WF_ROOT>/setup.py check (Unix 也可用 <WF_ROOT>/setup.sh check) 完成一次性环境配置`，用户确认后继续
+3. 运行中任何依赖调用失败 → 按"错误处理"章节启发式处理：报错 + 修复指引 + 提示 setup.py，不现场做全量检查
+
+**本工作流必需依赖**：`glab` CLI（获取 MR 信息）、osbot 项目环境（编译验证）、`osbot-eval`（测试）
+
 ### Step 1: 解析 MR 列表
 
 从用户输入中提取 MR 编号列表：
@@ -129,10 +173,10 @@ done
 
 #### 3.3 编译验证
 
-每个 MR pick 完成后立即编译：
+每个 MR pick 完成后立即编译（路径以 setup.py check 探测到的 osbot 路径为准，见 Step 0 状态文件 `items.osbot_path`）：
 
 ```bash
-cd /home/peng/workspace/osbot
+cd <状态文件 items.osbot_path 对应的 osbot 路径>
 ./scripts/package-ui.sh sidekick-ui
 ```
 
@@ -407,6 +451,9 @@ MR 描述模板：
 
 ## 错误处理
 
+**环境启发规则**：任何依赖调用失败时，先判断是否环境问题（glab 未认证、路径不对）。是 → 提示修复指引 + 运行 `setup.py check` 定位（路径按 Step 0 定位结果），修复后重试一次；瞬时错误直接重试一次，不重复尝试第三次。
+
+- **环境类错误（CLI/项目路径）**: 运行 `setup.py check` 获取检查表与修复指引；运行时深度诊断可调用 `env-doctor` skill
 - **MR 不存在**: 检查 MR 编号，跳过该 MR
 - **Cherry-pick 冲突**: 提供冲突分析和解决建议
 - **编译失败**: 回滚该 MR，继续或停止
@@ -423,6 +470,8 @@ MR 描述模板：
 
 ## 依赖
 
+- 环境: `setup.py` (Unix 便捷入口 setup.sh) - 一次性环境检查与安装（Step 0 门禁依据，仓库根定位见 Step 0）
+- Skill: `env-doctor` - 运行时深度诊断（可选，出错时用）
 - CLI: `glab` - GitLab API 操作
 - 项目 skill: `osbot-eval` - 测试用例执行
 - 子 agent: 独立复核一致性（通过 Agent 工具）
