@@ -22,15 +22,18 @@ fi
 PROJECT_ROOT=$(git rev-parse --show-toplevel)
 echo -e "${GREEN}项目根目录: $PROJECT_ROOT${NC}"
 
-# 检测项目的 skills 目录
-SKILLS_DIR=""
+# 检测项目的 skills 目录（支持多个）
+SKILLS_DIRS=()
 if [ -d "$PROJECT_ROOT/.agents/skills" ]; then
-    SKILLS_DIR="$PROJECT_ROOT/.agents/skills"
+    SKILLS_DIRS+=("$PROJECT_ROOT/.agents/skills")
     echo -e "${GREEN}检测到 .agents/skills 目录${NC}"
-elif [ -d "$PROJECT_ROOT/.claude/skills" ]; then
-    SKILLS_DIR="$PROJECT_ROOT/.claude/skills"
+fi
+if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
+    SKILLS_DIRS+=("$PROJECT_ROOT/.claude/skills")
     echo -e "${GREEN}检测到 .claude/skills 目录${NC}"
-else
+fi
+
+if [ ${#SKILLS_DIRS[@]} -eq 0 ]; then
     # 询问用户要创建哪个目录
     echo -e "${YELLOW}未找到 skills 目录，请选择创建位置:${NC}"
     echo "1) .agents/skills"
@@ -39,10 +42,10 @@ else
 
     case $choice in
         1)
-            SKILLS_DIR="$PROJECT_ROOT/.agents/skills"
+            SKILLS_DIRS=("$PROJECT_ROOT/.agents/skills")
             ;;
         2)
-            SKILLS_DIR="$PROJECT_ROOT/.claude/skills"
+            SKILLS_DIRS=("$PROJECT_ROOT/.claude/skills")
             ;;
         *)
             echo -e "${RED}无效选择${NC}"
@@ -50,8 +53,8 @@ else
             ;;
     esac
 
-    mkdir -p "$SKILLS_DIR"
-    echo -e "${GREEN}创建目录: $SKILLS_DIR${NC}"
+    mkdir -p "${SKILLS_DIRS[0]}"
+    echo -e "${GREEN}创建目录: ${SKILLS_DIRS[0]}${NC}"
 fi
 
 # 工作流列表
@@ -72,7 +75,6 @@ echo ""
 
 for workflow in "${WORKFLOWS[@]}"; do
     SOURCE="$WORKFLOW_DIR/$workflow"
-    TARGET="$SKILLS_DIR/$workflow"
 
     # 检查源目录是否存在
     if [ ! -d "$SOURCE" ]; then
@@ -80,33 +82,38 @@ for workflow in "${WORKFLOWS[@]}"; do
         continue
     fi
 
-    # 如果目标已存在
-    if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
-        # 检查是否已经是正确的符号链接
-        if [ -L "$TARGET" ] && [ "$(readlink -f "$TARGET")" = "$(readlink -f "$SOURCE")" ]; then
-            echo -e "${GREEN}✓ $workflow: 已安装${NC}"
-            skipped=$((skipped + 1))
-        else
-            # 备份旧文件/目录
-            if [ -d "$TARGET" ] && [ ! -L "$TARGET" ]; then
-                BACKUP="${TARGET}.backup.$(date +%Y%m%d_%H%M%S)"
-                mv "$TARGET" "$BACKUP"
-                echo -e "${YELLOW}⚠ $workflow: 备份现有目录到 $BACKUP${NC}"
-            else
-                rm -f "$TARGET"
-            fi
+    # 在所有检测到的 skills 目录中创建符号链接
+    for SKILLS_DIR in "${SKILLS_DIRS[@]}"; do
+        TARGET="$SKILLS_DIR/$workflow"
 
-            # 创建新的符号链接
+        # 如果目标已存在
+        if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+            # 检查是否已经是正确的符号链接
+            if [ -L "$TARGET" ] && [ "$(readlink -f "$TARGET")" = "$(readlink -f "$SOURCE")" ]; then
+                echo -e "${GREEN}✓ $workflow -> ${SKILLS_DIR##*/}: 已安装${NC}"
+                skipped=$((skipped + 1))
+            else
+                # 备份旧文件/目录
+                if [ -d "$TARGET" ] && [ ! -L "$TARGET" ]; then
+                    BACKUP="${TARGET}.backup.$(date +%Y%m%d_%H%M%S)"
+                    mv "$TARGET" "$BACKUP"
+                    echo -e "${YELLOW}⚠ $workflow -> ${SKILLS_DIR##*/}: 备份现有目录到 ${BACKUP##*/}${NC}"
+                else
+                    rm -f "$TARGET"
+                fi
+
+                # 创建新的符号链接
+                ln -s "$SOURCE" "$TARGET"
+                echo -e "${GREEN}✓ $workflow -> ${SKILLS_DIR##*/}: 已更新${NC}"
+                updated=$((updated + 1))
+            fi
+        else
+            # 创建符号链接
             ln -s "$SOURCE" "$TARGET"
-            echo -e "${GREEN}✓ $workflow: 已更新${NC}"
-            updated=$((updated + 1))
+            echo -e "${GREEN}✓ $workflow -> ${SKILLS_DIR##*/}: 已安装${NC}"
+            installed=$((installed + 1))
         fi
-    else
-        # 创建符号链接
-        ln -s "$SOURCE" "$TARGET"
-        echo -e "${GREEN}✓ $workflow: 已安装${NC}"
-        installed=$((installed + 1))
-    fi
+    done
 done
 
 echo ""
@@ -123,5 +130,7 @@ echo "  /mr-review-workflow  - MR review 流程"
 echo "  /mr-pick-workflow    - Cherry-pick 工作流"
 echo ""
 echo "验证安装:"
-echo "  ls -la $SKILLS_DIR"
+for SKILLS_DIR in "${SKILLS_DIRS[@]}"; do
+    echo "  ls -la $SKILLS_DIR"
+done
 echo ""
