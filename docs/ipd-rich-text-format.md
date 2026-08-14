@@ -42,7 +42,63 @@ IPD 评论的 `content` 字段支持两种格式：
 }
 ```
 
-## 完整示例
+## 关键要点
+
+### 1. HTML 标签的使用规则
+
+**正确**：将整个格式化段落放在一个 text 节点中
+```json
+{
+  "type": "text",
+  "text": "<p><b>【标题】</b></p><p>段落内容</p>"
+}
+```
+
+**错误**：不要将 `<p>` 标签和 `hardBreak` 混用
+```json
+// ❌ 错误 - <p> 标签会直接显示
+{"type": "text", "text": "<p>内容</p>"},
+{"type": "hardBreak"},
+{"type": "text", "text": "<p>下一段</p>"}
+```
+
+### 2. 换行的两种方式
+
+**方式 A：使用 `<p>` 标签（推荐用于段落）**
+```json
+{
+  "type": "text",
+  "text": "<p><b>标题</b></p><p>第一段内容</p><p>第二段内容</p>"
+}
+```
+
+**方式 B：使用 `hardBreak`（推荐用于简单换行）**
+```json
+[
+  {"type": "text", "text": "<b>标题</b>"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "第一行"},
+  {"type": "hardBreak"},
+  {"type": "text", "text": "第二行"}
+]
+```
+
+**不要混用**：`<p>` 和 `hardBreak` 选择其一。
+
+### 3. qiushiding 的实际格式（参考标准）
+
+```json
+[{
+  "type": "text",
+  "text": "<p><b>【Opus 5 双向交叉校验｜结论等级：实证（触发源与机制）】</b></p><p><b>结论</b>：<b>PAD 的 MiTalk IM 会话断了 99 秒</b>，那 30 秒里 PAD 根本没收到 file notify；文件从未到达，而对话仍报「已发到 PAD」。<b>与标题所写「本地接收后手动删除」之间未找到因果链。</b></p><p><b>根因（实证）</b>　A2A 走 MiTalk IM，消息按 seq 严格递增。把 seq→msgId（发送方 epoch ms）解码后与 Mac 事件逐条对上：<br><code>seq 2000593</code> msgId 21:34:09.682 → PAD <b>21:34:09.905</b>（正常 223ms）<br>...</p>"
+}]
+```
+
+**关键特征**：
+- ✅ **整个分析作为一个 text 节点**
+- ✅ 使用 `<p>` 分段，`<b>` 加粗，`<code>` 标记代码
+- ✅ 在段落内使用 `<br>` 换行（不是 hardBreak）
+- ✅ 无额外的 hardBreak 节点
 
 ### 示例 1：简单格式化文本
 

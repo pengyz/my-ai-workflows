@@ -441,78 +441,82 @@ Commit message 格式要求：
 }
 ```
 
-**添加富文本评论**（推荐格式）：
+**添加专业的根因分析评论**（使用富文本格式）：
 
-```
+参考 qiushiding 在问题单 846723 的分析风格，使用**单个 text 节点**包含整个分析：
+
+```bash
+# 构造富文本内容（关键：整个分析作为一个 text 节点）
+content=$(jq -nc --arg analysis "$(cat <<'EOF'
+<p><b>【根因定谳 + 修复已提交】</b></p>
+<p><b>结论</b>：<一句话根因结论></p>
+<p><b>根因（实证）</b></p>
+<p>日志证据：<br>
+<code>HH:MM:SS.mmm [Component] 关键日志内容</code><br>
+<code>HH:MM:SS.mmm [Component] 错误或超时信息</code></p>
+<p>代码证据：<br>
+定位到 <code>FileName.kt:123</code><br>
+<代码逻辑说明，为什么会产生这个日志></p>
+<p><b>问题定界</b></p>
+<p>主责：<b>[Android/PC/MiLink]</b><br>
+依据：<br>
+1. 日志 <code>file.log:123</code> HH:MM:SS 显示 ...<br>
+2. 代码 <code>File.kt:456</code> 逻辑 ...<br>
+3. 对端日志 ...</p>
+<p><b>修复方案</b></p>
+<p>1. <修复点1><br>
+2. <修复点2></p>
+<p><b>验证结果</b></p>
+<p>✓ 编译通过<br>
+✓ 测试通过 (<passed>/<total>)</p>
+<p>MR: <mr_url><br>
+Commit: <code><commit_hash></code></p>
+EOF
+)" '[{"type":"text","text":$analysis}]')
+
+# 调用 MCP 添加评论
 调用 mcp__mi-adt__M_saveComment，传入参数：
 {
   "userName": "pengyaozong",
   "issId": "ISS-xxx",
-  "content": "[构造的富文本JSON数组]"
+  "content": "$content"
 }
 ```
 
-**富文本格式**（参考 `~/my-ai-workflows/docs/ipd-rich-text-format.md`）：
+**格式要点**（关键！）：
 
-评论使用 JSON 数组，包含不同类型的节点：
+1. **整个分析作为一个 text 节点**
+   ```json
+   [{"type": "text", "text": "<p>...</p><p>...</p>"}]
+   ```
+   不是：
+   ```json
+   [
+     {"type": "text", "text": "<p>...</p>"},
+     {"type": "hardBreak"},  // ❌ 错误
+     {"type": "text", "text": "<p>...</p>"}
+   ]
+   ```
 
-```json
-[
-  {"type": "text", "text": "<b>【修复完成】</b>"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "<b>根因</b>：<定位的问题>"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "<b>修复</b>：<修复说明>"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "Commit: <code><commit-hash></code>"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "MR: <MR-URL>"},
-  {"type": "hardBreak"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "<b>验证结果</b>"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "✓ 编译通过"},
-  {"type": "hardBreak"},
-  {"type": "text", "text": "✓ 测试通过 (<passed>/<total>)"}
-]
-```
+2. **使用 `<p>` 分段，`<br>` 换行**
+   - `<p>...</p>` - 段落
+   - `<br>` - 段落内换行
+   - 不使用 `hardBreak` 节点
 
-**节点类型**：
-- `{"type": "text", "text": "内容"}` - 文本（支持 HTML：`<b>`, `<code>`, `<p>`）
-- `{"type": "hardBreak"}` - 换行
-- `{"type": "mention", "id": "username", "label": "显示名", "enableNotification": true}` - @某人
+3. **HTML 标签**
+   - `<b>标题</b>` - 粗体
+   - `<code>代码</code>` - 代码片段
+   - `<p>段落</p>` - 段落
 
-**构造示例**（使用 jq）：
+4. **参考 qiushiding 的实际格式**
+   ```json
+   [{
+     "type": "text",
+     "text": "<p><b>【标题】</b></p><p><b>结论</b>：内容</p><p><b>根因</b><br>详细分析<br><code>代码片段</code></p>"
+   }]
+   ```
 
-```bash
-content=$(jq -nc --arg commit "$commit_hash" --arg mr "$mr_url" '[
-  {"type":"text","text":"<b>【修复完成】</b>"},
-  {"type":"hardBreak"},
-  {"type":"text","text":"<b>根因</b>：XXX"},
-  {"type":"hardBreak"},
-  {"type":"text","text":"<b>修复</b>：YYY"},
-  {"type":"hardBreak"},
-  {"type":"text","text":("Commit: <code>" + $commit + "</code>")},
-  {"type":"hardBreak"},
-  {"type":"text","text":("MR: " + $mr)},
-  {"type":"hardBreak"},
-  {"type":"hardBreak"},
-  {"type":"text","text":"<b>验证结果</b>"},
-  {"type":"hardBreak"},
-  {"type":"text","text":"✓ 编译通过"},
-  {"type":"hardBreak"},
-  {"type":"text","text":"✓ 测试通过"}
-]')
-```
-
-**纯文本格式**（简单场景）：
-
-如果内容简单，也可以直接传纯文本字符串：
-```
-content="问题已修复\n\nCommit: abc123\n测试通过"
-```
-
-但**推荐使用富文本**，格式更清晰、可读性更好。
+详细格式说明见：`~/my-ai-workflows/docs/ipd-rich-text-format.md`
 
 ### Step 8: 生成修复报告
 
