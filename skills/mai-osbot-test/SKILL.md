@@ -198,6 +198,7 @@ def design_eval_case(change: ChangeAnalysis) -> EvalCaseDesign:
 | 门禁层级 | ≥ 3 层 | unit + eval + smoke |
 | 硬判据 | 100% 覆盖 | 所有验证点必须有明确判据 |
 | 回归防护 | 必需 | bugfix 必须有 smoke 测试 |
+| **真机集成测试** | 按规则判定 | 自动化无法覆盖的场景 |
 
 **复核输出**：
 ```json
@@ -206,8 +207,172 @@ def design_eval_case(change: ChangeAnalysis) -> EvalCaseDesign:
   "issues": [],
   "recommendations": [
     "建议将 eval case 纳入 smoke 集"
-  ]
+  ],
+  "integration_test_required": {
+    "required": true,
+    "type": "osbot-eval-cross-device",
+    "reason": "跨设备文件传输修改，需验证真实网络传输链路"
+  }
 }
+```
+
+---
+
+### 模块 4.1: Integration Test Decider（真机集成测试判定器）
+
+**职责**：判定是否需要真机集成测试，以及使用哪种测试手段
+
+#### **判定规则（决策树）**
+
+```
+修改类型判定
+│
+├─ 协议解析纯逻辑？
+│  └─ YES → Unit Test 足够 ✅
+│
+├─ 跨设备通信/文件传输？
+│  ├─ 需要 LLM 决策？
+│  │  └─ YES → osbot-eval + RC/XDEV（双重验证）🔴
+│  └─ NO → RC/XDEV 足够 🟡
+│
+├─ 单端 Tool 工具？
+│  ├─ 有副作用（电话/短信/智能家居/删除数据）？
+│  │  └─ YES → 隔离环境 + 人工验证 🔴
+│  └─ NO → osbot-eval 自动化 🟡
+│
+├─ Agent 路由/Skill 加载？
+│  └─ osbot-eval（必须有对应 case）🟡
+│
+├─ Memory 读写？
+│  └─ osbot-eval memory category case 🟡
+│
+├─ Permission guard？
+│  └─ osbot-eval + RC（权限门交互）🟡
+│
+├─ UI 层/用户交互？
+│  └─ 人工真机 + 录屏 🔴
+│
+└─ 资源文件（prompt/strings）？
+   └─ osbot-eval（验证 LLM 理解）🟡
+```
+
+#### **测试能力矩阵**
+
+| 维度 | osbot-eval | RC | XDEV | sidekick-talk | Unit Test |
+|------|-----------|-----|------|---------------|-----------|
+| **单端工具调用** | ✅ | ❌ | ❌ | ❌ | 部分 |
+| **LLM 决策路由** | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **跨设备通信** | ❌ | ✅ | ✅ | ❌ | ❌ |
+| **文件传输全链路** | ❌ | 部分 | ✅ | ❌ | ❌ |
+| **权限门交互** | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Chaos 注入** | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **自动化断言** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **5min 冒烟门禁** | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **设备要求** | 1 手机 | 1手机+1PC | 1手机+1PC | 1 手机 | 0 |
+| **判据硬度** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐ | ⭐⭐⭐⭐⭐ |
+
+#### **必须真机验证的修改类型**
+
+| 优先级 | 修改类型 | 必须验证方式 | 理由 |
+|-------|---------|-------------|------|
+| **P0** | **跨设备通信协议** | RC + XDEV | 单端无法验证双端状态机 |
+| **P0** | **文件传输链路** | XDEV | 真实网络/云端依赖 |
+| **P0** | **Tool 工具实现** | osbot-eval | LLM 调用行为需真实验证 |
+| **P0** | **Agent 路由逻辑** | osbot-eval | LLM 路由决策难 mock |
+| **P1** | **Permission guard** | osbot-eval + RC | 需真实权限栈 |
+| **P1** | **Skill 加载/路由** | osbot-eval | 依赖真实 assets 文件 |
+| **P1** | **Memory 读写** | osbot-eval memory case | 真实文件系统行为 |
+| **P2** | **UI 层** | 人工真机 | UI 交互自动化成本高 |
+| **P2** | **资源文件** | osbot-eval | 验证 LLM 理解无偏差 |
+| **P3** | **协议解析纯逻辑** | Unit Test 足够 | 确定性逻辑 |
+
+#### **自动化测试不够的场景**
+
+1. **UI 跳转后的用户操作**
+   - 场景：Agent 跳转到系统设置页，用户需手动开启权限
+   - 验证方式：人工测试 + 操作录屏
+
+2. **极端长上下文压缩行为**
+   - 场景：数千轮对话后的上下文管理
+   - 验证方式：压测环境 + 抽样人工检查
+
+3. **LLM 主观语言质量**
+   - 场景：对话自然度、礼貌性、用户体验
+   - 验证方式：人工评测 + A/B Test
+
+4. **跨设备 A2A 防死循环**
+   - 场景：设备 A 派任务给设备 B，B 又派回 A
+   - 验证方式：多设备真机联调
+
+5. **MCP 外部服务稳定性**
+   - 场景：第三方 MCP 服务（高德/百度地图）
+   - 验证方式：宽松断言 + 人工抽查
+
+6. **副作用类操作**
+   - 场景：真打电话/发短信/控制智能家居/删除用户数据
+   - 验证方式：隔离测试环境 + 人工验证
+
+#### **判定输出**
+
+**格式**：
+```json
+{
+  "integration_test_required": true,
+  "test_strategy": {
+    "primary": "osbot-eval-cross-device",
+    "secondary": ["osbot-eval"],
+    "manual": false
+  },
+  "reason": "跨设备文件传输修改，需验证真实网络传输链路",
+  "test_matrix": {
+    "cases_required": [
+      "xdev-file-transfer-duplicate-names",
+      "xdev-chaos-disconnect-during-upload"
+    ],
+    "estimated_time": "20-30 min",
+    "devices_required": "1 手机 + 1 PC"
+  },
+  "manual_test_checklist": null
+}
+```
+
+#### **人工测试矩阵生成**
+
+当判定需要人工测试时，自动生成测试矩阵：
+
+```markdown
+## 人工真机测试矩阵
+
+### 测试场景：跨端文件转发 - 同名文件处理
+
+| 编号 | 前置条件 | 操作步骤 | 预期结果 | 实际结果 | 状态 |
+|------|---------|---------|---------|---------|------|
+| TC-01 | 手机已有 `合同.pdf` | PC 回传同名 `合同.pdf` | 手机保存为 `合同 (1).pdf` | | ⏳ |
+| TC-02 | TC-01 完成 | 语音："把合同发到平板" | 平板收到 `合同 (1).pdf`（新版本） | | ⏳ |
+| TC-03 | TC-01 完成 | LLM 错误使用无后缀路径 | remote_file 工具拒绝，返回 `[STALE_LOCAL_FILE]` | | ⏳ |
+
+### 验证命令
+
+```bash
+# TC-01: 验证文件重命名
+adb shell "ls -lh /sdcard/Documents/XiaoAi/*.pdf"
+# 预期：合同.pdf + 合同 (1).pdf
+
+# TC-02: 验证平板收到新文件
+ANDROID_SERIAL=<平板> adb shell "cat /sdcard/Documents/XiaoAi/合同.pdf"
+# 预期：新版本内容
+
+# TC-03: 验证拦截日志
+adb logcat -s "RemoteFileTool:*" | grep "\[STALE_LOCAL_FILE\]"
+```
+
+### 测试数据
+
+```bash
+# 准备测试文件
+echo "历史旧版本" > /tmp/合同.pdf
+echo "新回传版本" > /tmp/合同-new.pdf
+```
 ```
 
 ---
