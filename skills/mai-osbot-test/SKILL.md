@@ -1,109 +1,381 @@
 ---
 name: mai-osbot-test
 description: |
-  OSBot 统一测试编排。按场景路由到正确的测试引擎（osbot-eval 单端行为 / smoke 提交门禁 /
-  双端 RC-XDEV / JS CLI 单测 / jvm 离线），先做环境门禁（含 Linux 可行性说明）再执行，
-  统一归一各引擎结果并对接 mr-preflight MR 门禁。
-  触发词："跑测试"、"跑 eval"、"测试一下"、"smoke"、"冒烟"、"回归验证"、"双端联测"、"测试哪个引擎"。
-  legacy 提示：app:shell / app:headless 已过时，主 app 为 sidekick-ui。
+  OSBot 测试缺口探测与执行编排。双阶段工作：(1) Analyze - 分析 MR 变更、探测测试缺口、设计测试覆盖、独立复核完备性；(2) Eval - 统一执行测试清单、生成测试报告、更新 MR 评论。
+  触发词："测试分析"、"测试缺口"、"跑测试"、"测试这个 MR"、"验证修复"。
 ---
 
 # OSBot 测试编排 (mai-osbot-test)
 
-统一测试入口。**只做路由/门禁/归一，不重复实现引擎**——具体执行委托给 osbot 项目内的引擎 skill（osbot-eval / osbot-eval-remote-control / osbot-eval-cross-device）。
+**核心定位**：测试缺口探测器 + 用例设计器 + 执行编排器
 
-**前置**：在 osbot 仓库目录内运行（或设置 `OSBOT_PATH` 环境变量指向 osbot 仓库，见 `mai-env-doctor`）。
+针对特定 MR/功能/修复，自动分析测试缺口，设计测试覆盖，执行多级门禁，产出完备的测试报告。
 
-## 测试基础设施地图
+---
 
-| 层 | 引擎 | 被测对象 | 产出 |
-|----|------|---------|------|
-| 真机 Agent eval | `.claude/skills/osbot-eval/eval.py` | **主 app sidekick-ui**（com.miui.voiceassist） | `eval/results/<ts>/{report.json, report.html, eval-summary.json}` |
-| 双端协议 e2e | osbot-eval-remote-control / osbot-eval-cross-device | 手机 sidekick + PC miclaw_desktop | 各自 sessions dump |
-| JS CLI 单测 | `node scripts/tests/run-all-tests.mjs`（32 个） | `app/core` 的 bash-scripts CLI 命令 | mjs 汇总 |
-| JVM 单测 | gradle `:app:core:jsTest` / unit-test | Kotlin 逻辑 | gradle 报告 |
-| 离线 mock | `eval.py --target jvm` | osbot-server.jar（无设备） | 同上 eval 报告 |
+## 🎯 双阶段架构
 
-## 场景路由（第一步：判断用户意图）
+### 阶段 1: Analyze（分析与设计）
 
-| 用户意图 | 路由到 | 命令 |
-|---------|--------|------|
-| 提交前门禁 | **smoke 100% PASS** | `python .claude/skills/osbot-eval/eval.py --smoke`（~5min，exit 0/1） |
-| 单端行为验证（主 app） | osbot-eval，默认 sidekick-session | `eval.py --run-one <case-id>` / `--filter <pattern>` / `--set <suite>` |
-| 真 UI 渲染验证 | osbot-eval `--target sidekick-ui` | `eval.py --set <suite> --target sidekick-ui` |
-| CLI 命令逻辑 | JS CLI 测试 | `node scripts/tests/run-all-tests.mjs` |
-| 双端远控 e2e | osbot-eval-remote-control | 按该 skill 流程（需双端在线） |
-| 双端文件传输 e2e | osbot-eval-cross-device | 按该 skill 流程（需双端在线，无 LLM） |
-| 多设备并行回归 | headless_smoke_rounds | ⚠️ **legacy**（见下） |
-| 无设备离线 | osbot-eval `--target jvm` | `eval.py --set <suite> --target jvm` |
-| 联调操作（发消息/consent/上传） | sidekick-talk / osbot-talk | 各自 CLI；**发消息前先做设备发现与寻址**（见下） |
+**输入**：
+- MR URL / IPD ID
+- 代码变更 diff
+- 修复描述
 
-> **多设备/给任意在线设备发消息**：先按 `sidekick-talk` 的「设备发现与寻址」章节建立 **设备名-suid-在线状态-adb device id 四元组图谱**（`adb devices -l` + 每台设备查询「我有哪些云端在线设备」），再以 `ANDROID_SERIAL` 寻址目标设备发消息。
-| trace 查看 | osbot-trace-viz | 按该 skill |
-
-## 环境门禁（执行前必做，复用 mai-env-doctor 模式）
-
-按路由结果检查目标引擎的前置条件，输出 ✅/⚠️/❌，❌ 时给出修复动作（详见 `mai-env-doctor` skill）：
-
-1. **通用**：`python3`（≥3.10）、`PyYAML`、`adb` 可用
-2. **单端 smoke/eval（sidekick-session / sidekick-ui）**：adb 在线设备 ≥1、`com.miui.voiceassist` debug APK 已装（`setup.py check` 可查 osbot 路径）
-3. **双端 RC/XDEV**：USB adb 手机 + **运行中的 miclaw dev 实例**（`cd miclaw_desktop && npm run electron:dev`，写 `$TMPDIR/rc-dev-driver.json`）+ MiTalk 同账号在线配对
-4. **JS CLI 测试**：node ≥18
-5. **jvm 离线**：`app/jvm-runner` 已构建，无设备要求
-6. **legacy 引擎**（shell / headless）：命中即提示过时并询问是否改用主 target
-
-**Linux 可行性**（本 skill 全部引擎在 Linux 可运行）：
-
-| 引擎 | Linux | 说明 |
-|------|-------|------|
-| osbot-eval（单端/jvm） | ✅ | python3 + adb；jvm 完全免设备 |
-| JS CLI / JVM 单测 | ✅ | 无设备 |
-| sidekick-talk / osbot-talk | ✅ | 纯 bash + adb |
-| RC / XDEV（双端） | ✅（条件） | 需本机跑 miclaw dev 实例（Electron 跨平台）+ USB adb；不依赖 Windows 原生互联 |
-| headless（legacy） | ✅ | 需旧 headless APK 设备 |
-
-**Windows**：Python 脚本 `python .../eval.py`；bash 命令用 Git Bash 或 PowerShell 等价（双平台约定见各引擎 skill）。
-
-## 结果归一
-
-执行完向用户统一汇报，格式：
-
-```markdown
-## 测试结果 (<引擎名>)
-
-- **目标**: sidekick-ui / <case-set>
-- **结果**: <passed>/<total> (<pass_rate>)
-- **关键失败**: <case-id>: <失败摘要>（详见 <report 路径>）
-- **产物**: <report.json / eval-summary.json / mjs 汇总路径>
+**处理流程**：
+```
+1. Change Analyzer   → 识别变更类型、范围、关键修改点
+2. Gap Detector      → 检测单元测试、eval case、smoke 覆盖缺口
+3. Test Designer     → 设计测试用例、确定验证点、定义硬判据
+4. Compliance Checker→ 独立复核覆盖度、门禁层级、回归防护
 ```
 
-各引擎产物位置：
-- osbot-eval / jvm：`eval/results/<ts>/`（`report.json` + `eval-summary.json` + `sessions/<case-id>/`）
-- JS CLI：`scripts/tests/` runner 汇总输出
-- RC / XDEV：各自 skill 的 sessions 目录
+**输出**：测试清单（Test Plan JSON）
 
-## MR 门禁对接
+### 阶段 2: Eval（执行与报告）
 
-提交前（配合 `osbot-mr-preflight` skill）：
-- 必跑 `eval.py --smoke` 且 100% PASS
-- 变更命中 trace 门禁路径（`**/agent/**`、`**/tools/**`、`**/llm/**`、`**/assets/agents/**`、`**/assets/prompts/**`、`**/assets/tool_overlays.json`）→ 用 `osbot-trace-viz` 取 trace 证据
-- Agent 行为修复 / 新意图 / 工具路由改动 → 需补 eval case（`eval/cases/`，schema 校验：`validate_cases.py`）
+**输入**：Analyze 阶段的测试清单
 
-## legacy 标注（2026-08 确认）
+**处理流程**：
+```
+1. Test Executor     → 按门禁层级执行（unit → eval → smoke）
+2. Result Collector  → 收集测试结果、断言状态、执行时长
+3. Report Generator  → 生成测试报告
+4. MR Updater        → 将报告更新到 MR 评论
+```
 
-| 模块 | 状态 | 说明 |
+**输出**：测试报告 + MR 评论
+
+---
+
+## 📋 使用方式
+
+### 方式 1：完整流程（推荐）
+
+```bash
+# 自动分析 + 执行 + 报告
+mai-osbot-test analyze-and-eval --mr https://git.../osbot/-/merge_requests/6278
+```
+
+**流程**：
+1. Analyze: 分析 MR 6278 的变更
+2. Detect: 探测测试缺口
+3. Design: 设计测试覆盖
+4. Compliance: 复核完备性
+5. Eval: 执行测试清单
+6. Report: 更新 MR 评论
+
+### 方式 2：分步执行
+
+```bash
+# 步骤 1: 仅分析
+mai-osbot-test analyze --mr https://git.../6278 --output test-plan.json
+
+# 步骤 2: 复核测试计划（可选）
+cat test-plan.json
+
+# 步骤 3: 执行测试
+mai-osbot-test eval --plan test-plan.json --output test-report.json
+
+# 步骤 4: 更新 MR
+mai-osbot-test report --mr https://git.../6278 --report test-report.json
+```
+
+### 方式 3：自然语言触发
+
+用户："帮我测试一下 MR 6278"
+
+Claude 自动：
+1. 识别 MR URL
+2. 调用 `mai-osbot-test analyze-and-eval`
+3. 输出测试报告摘要
+
+---
+
+## 🔍 Analyze 阶段详解
+
+### 模块 1: Change Analyzer（变更分析器）
+
+**识别变更类型**：
+- `bugfix` → 测试重点：验证修复有效性 + 防回归
+- `feature` → 测试重点：功能完整性 + 边界情况
+- `refactor` → 测试重点：行为一致性 + 性能
+
+**识别变更范围**：
+```python
+# 基于文件路径识别
+"interconnect/" → cross-device
+"agent/" → agent-behavior
+"tools/" → tool-logic
+"llm/" → llm-routing
+```
+
+**提取关键修改点**：
+- 新增函数/类
+- 修改的核心逻辑
+- 新增的依赖
+
+### 模块 2: Gap Detector（缺口探测器）
+
+**检测维度**：
+
+**1. 单元测试缺口**
+```python
+# 检查规则
+for modified_file in change.modified_files:
+    test_file = find_corresponding_test(modified_file)
+    if not test_file:
+        gap = "缺少单元测试文件"
+    elif test_coverage(test_file) < 80:
+        gap = "单元测试覆盖率不足"
+```
+
+**2. Eval Case 缺口**
+```python
+# 检查规则
+scope = change.scope  # e.g., "interconnect"
+keywords = extract_keywords(change.description)  # e.g., ["duplicate", "file"]
+
+existing_cases = glob(f"eval/cases/{scope}/*")
+matched = [c for c in existing_cases if any(k in c for k in keywords)]
+
+if not matched:
+    gap = f"缺少 {scope} 的 eval case（关键词：{keywords}）"
+```
+
+**3. Smoke 覆盖缺口**
+```python
+# 检查规则
+if change.type == "bugfix" and not in_smoke_suite(change.scope):
+    gap = "修复未纳入 smoke 回归集"
+```
+
+### 模块 3: Test Designer（测试设计器）
+
+**设计 Eval Case**：
+
+**输入**：变更分析结果
+
+**输出**：Eval Case 设计（YAML 结构）
+
+**设计规则**：
+```python
+def design_eval_case(change: ChangeAnalysis) -> EvalCaseDesign:
+    # 1. Case ID: {scope}-{feature-slug}
+    case_id = f"{change.scope}-{slugify(change.key_feature)}"
+    
+    # 2. Setup: 根据修复类型确定前置条件
+    if "db" in change.dependencies:
+        setup.add("db_inject", ...)
+    if "file" in change.dependencies:
+        setup.add("files", ...)
+    
+    # 3. Validation: 从关键修改点提取验证点
+    for key_change in change.key_changes:
+        validation = extract_validation(key_change)
+        validations.append(validation)
+    
+    # 4. Assertions: 定义硬判据
+    for validation in validations:
+        assertion = define_hard_assertion(validation)
+        assertions.append(assertion)
+    
+    return EvalCaseDesign(...)
+```
+
+**硬判据设计原则**：
+- ✅ 可机器验证（正则匹配、字段存在性、数值比较）
+- ✅ 明确 PASS/FAIL（无模糊判断）
+- ✅ 可复现（确定性 setup）
+
+### 模块 4: Compliance Checker（合规复核器）
+
+**复核标准**：
+
+| 维度 | 标准 | 理由 |
 |------|------|------|
-| `app:shell`（miclaw-ui，com.aios.osbot） | ⚠️ 过时 | 独立聊天 UI 已被 sidekick-ui 取代；`--target shell` 仅历史用例使用 |
-| `app:headless`（server/pilot） | ⚠️ 过时 | headless APK / CliTransportService socket 路径（`--target headless/auto`）已废弃；osbot-headless-eval 的用例不再新增 |
-| **`:mainApp`（sidekick-ui，com.miui.voiceassist）** | ✅ **当前主 app** | 默认 target = `sidekick-session`（内嵌 osbot 进程），真 UI 用 `sidekick-ui` |
+| 单元测试覆盖率 | ≥ 80% | 确保核心逻辑被测试 |
+| 门禁层级 | ≥ 3 层 | unit + eval + smoke |
+| 硬判据 | 100% 覆盖 | 所有验证点必须有明确判据 |
+| 回归防护 | 必需 | bugfix 必须有 smoke 测试 |
 
-路由时默认走主 app target；用户明确要求旧模块时才走 legacy，且先提示过时。
+**复核输出**：
+```json
+{
+  "compliant": true,
+  "issues": [],
+  "recommendations": [
+    "建议将 eval case 纳入 smoke 集"
+  ]
+}
+```
 
-## 依赖
+---
 
-- 环境: `mai-env-doctor` / `setup.py` - 环境门禁与检查
-- 项目 skill: `osbot-eval` - 单端 eval 引擎（路由目标）
-- 项目 skill: `osbot-eval-remote-control` / `osbot-eval-cross-device` - 双端引擎（路由目标）
-- 项目 skill: `osbot-mr-preflight` / `osbot-trace-viz` - MR 门禁对接
-- 项目 skill: `sidekick-talk` / `osbot-talk-to-osbot` - 联调操作（路由目标）
-- CLI: `adb`、`python3`、`node`（按路由场景）
+## 🏃 Eval 阶段详解
+
+### 模块 5: Test Executor（测试执行器）
+
+**执行流程**：
+
+**门禁 Level 1: 单元测试**
+```bash
+./gradlew test --tests <test_class>
+```
+- 失败 → 停止，报告 "单元测试未通过"
+- 通过 → 继续
+
+**门禁 Level 2: 集成测试（Eval Cases）**
+```bash
+python .claude/skills/osbot-eval/eval.py --run-one <case_id>
+```
+- 失败 → 停止，报告 "集成测试未通过"
+- 通过 → 继续
+
+**门禁 Level 3: Smoke 回归**
+```bash
+python .claude/skills/osbot-eval/eval.py --smoke
+```
+- 失败 → 报告 "回归测试失败"
+- 通过 → 报告 "所有门禁通过 ✅"
+
+### 模块 6: Report Generator（报告生成器）
+
+**报告结构**：
+
+```markdown
+## 测试报告 - MR 6278
+
+**执行时间**: 2026-08-15 15:30:00  
+**总体状态**: ✅ PASS
+
+### 门禁 Level 1: 单元测试
+- **状态**: ✅ PASS
+- **通过**: 42 / 42
+- **耗时**: 2m15s
+
+### 门禁 Level 2: 集成测试
+- **状态**: ✅ PASS
+- **用例**: interconnect-send-task-duplicate-file-names
+- **断言**:
+  - ✅ remote_file 工具被调用
+  - ✅ paths 参数匹配序号后缀模式
+  - ✅ 未使用无后缀路径
+- **耗时**: 2m30s
+
+### 门禁 Level 3: Smoke 回归
+- **状态**: ✅ PASS
+- **通过**: 50 / 50
+- **耗时**: 5m20s
+
+### 建议
+✅ 所有门禁通过，建议 approve MR
+```
+
+---
+
+## 📊 测试策略地图
+
+| 变更类型 | 测试重点 | 门禁层级 |
+|---------|---------|---------|
+| **bugfix** | 验证修复 + 防回归 | unit (必需) + eval (推荐) + smoke (必需) |
+| **feature** | 功能完整性 + 边界 | unit (必需) + eval (必需) + smoke (可选) |
+| **refactor** | 行为一致性 + 性能 | unit (必需) + smoke (必需) |
+| **perf** | 性能指标 + 回归 | unit (可选) + perf (必需) + smoke (必需) |
+
+---
+
+## 🔧 依赖工具
+
+### 底层测试引擎（委托执行）
+- `osbot-eval` - 单端 eval 引擎
+- `osbot-eval-remote-control` - 双端 RC 测试
+- `osbot-eval-cross-device` - 双端 XDEV 测试
+- `gradle` - JVM 单元测试
+- `node` - JS CLI 测试
+
+### 辅助工具
+- `eval/helpers/db_injector.py` - 数据库注入
+- `sidekick-talk` - 真机消息发送
+- `mai-env-doctor` - 环境门禁
+
+---
+
+## 🎯 设计原则
+
+1. **只做分析和编排，不重复实现引擎**
+   - 执行委托给 osbot-eval / gradle / node
+   
+2. **硬判据优先**
+   - 所有验证点必须有明确的 PASS/FAIL
+
+3. **多层门禁**
+   - unit → eval → smoke，门禁失败立即停止
+
+4. **自动化优先，手工兜底**
+   - 优先设计自动化测试
+   - 无法自动化时输出测试指南（Playbook）
+
+5. **独立复核**
+   - Compliance Checker 独立验证测试完备性
+
+---
+
+## 📚 示例
+
+### 示例 1: 分析 IPD 847472
+
+```
+用户: "帮我测试 MR 6278"
+
+mai-osbot-test:
+  1. Analyze MR 6278
+  2. Detect gaps:
+     - ✅ 单元测试充分
+     - ⚠️ 缺少 eval case
+     - ✅ 在 smoke 集中
+  3. Design eval case: send-task-duplicate-file-names.yaml
+  4. Compliance check: ✅ 覆盖完备
+  5. Eval:
+     - Level 1 (unit): PASS
+     - Level 2 (eval): PASS
+     - Level 3 (smoke): PASS
+  6. Report: 更新 MR 6278 评论
+```
+
+### 示例 2: 仅分析不执行
+
+```bash
+mai-osbot-test analyze --mr https://git.../6278
+
+# 输出 test-plan.json
+{
+  "gaps": [
+    {
+      "type": "eval_case",
+      "description": "缺少同名文件路径验证的 eval case",
+      "priority": "P0",
+      "recommendation": "创建 send-task-duplicate-file-names.yaml"
+    }
+  ],
+  "test_plan": {
+    "level_1": ["RemoteFileToolTest", "SendTaskToDeviceToolTest"],
+    "level_2": ["interconnect-send-task-duplicate-file-names"],
+    "level_3": ["smoke suite"]
+  }
+}
+```
+
+---
+
+## ⚠️ 限制
+
+1. **仅支持 osbot 项目**
+   - 前置：在 osbot 仓库目录内运行
+
+2. **依赖底层引擎**
+   - osbot-eval / gradle 必须可用
+
+3. **不替代 QA**
+   - 研发视角的测试覆盖（快速反馈 + 硬判据）
+   - QA 负责完整测试覆盖和探索性测试
