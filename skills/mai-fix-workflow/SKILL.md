@@ -34,7 +34,7 @@ description: |
 
 **0.1 查 IPD 评论**：调用 `mi-adt` `M_pageOverallComment` / `M_getCommentList`（issId），检查是否存在 `mai-analysis` 上传的**根因分析评论**（内容含"根因定谳"标记）。
 
-**0.2 查本地结论文件**：`.claude/ipd-conclusions/<issId>.md` 是否存在且完整（含结论/证据链/问题定界/问题清单/修复方案建议 + 审查记录）。
+**0.2 查本地结论文件**：`.claude/ipd-conclusions/<issId>-conclusion.md` 是否存在且完整（含结论/证据链/问题定界/问题清单/修复方案建议 + 审查记录）。
 
 **0.3 查修复数据库**：
 ```bash
@@ -54,7 +54,7 @@ python <WF_ROOT>/fix-db.py update <issId> --status fixing -t "开始修复"
 
 ## Step 1: 读取结论
 
-从 `.claude/ipd-conclusions/<issId>.md`（或 IPD 评论）提取：
+从 `.claude/ipd-conclusions/<issId>-conclusion.md`（或 IPD 评论）提取：
 - 一句话根因结论
 - 根因证据链（日志+代码 file:line）
 - 问题清单（可能多个根因）
