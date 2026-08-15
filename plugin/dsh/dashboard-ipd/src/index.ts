@@ -16,7 +16,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
 import type { Session } from '@deepseek-ai/dsh-session'
-import type { SubagentRunEndInfo, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
+import type { SubagentRunEndInfo, SubagentRunInfo, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -36,7 +36,7 @@ import { PRIORITIES, SCOPES } from './types.js'
 import type { Scope } from './types.js'
 
 export const name = 'dashboard-ipd'
-export const inject = ['tools', 'commands', 'subagents']
+export const inject = ['tools', 'commands', 'subagents', 'sessions']
 
 /** IPD 看板插件配置。 */
 export interface Config {
@@ -183,6 +183,72 @@ function statusFromStopReason(reason: SubagentStopReason): IpdAgentRunStatus {
   return 'failed'
 }
 
+/** 从父会话最近的用户/助手文本中提取最近提到的问题号 (LLM 编排关联用). */
+function extractIssueFromContext(session: Session): { issueId: string; action: 'analyze' | 'fix' } | undefined {
+  const texts: string[] = []
+  const events = session.events
+  for (let i = events.length - 1; i >= 0 && texts.length < 12; i--) {
+    const event = events[i]
+    if (event === undefined) continue
+    if (event.type !== 'user/message' && event.type !== 'assistant/message') continue
+    const content = (event.data as { content?: unknown }).content
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (block !== null && typeof block === 'object' && 'text' in block && typeof block.text === 'string') {
+        texts.push(block.text)
+      }
+    }
+  }
+  for (const text of texts) {
+    const match = /ISS-\d{6}-\d{8}[A-Z]?/.exec(text)
+    if (match !== null && match[0] !== undefined) {
+      return { issueId: match[0], action: /修复/.test(texts.join('')) ? 'fix' : 'analyze' }
+    }
+  }
+  return undefined
+}
+
+/**
+ * 通用子 agent 关联跟踪: 面板命令 spawn 的在命令时已记录 (agentRuns 命中跳过);
+ * LLM 经 skill/subagent 工具编排的 spawn, 从父会话上下文推导问题号并记录,
+ * 使面板能展示"哪个子 agent 在分析哪个问题"。终态统一由 subagent/end 回写。
+ */
+function registerSubagentTracker(
+  ctx: Context,
+  agentRuns: Map<string, { controller: AbortController; session: Session; record: IpdAgentRunData }>,
+): void {
+  ctx.on('subagent/start', (info: SubagentRunInfo) => {
+    if (agentRuns.has(info.id)) return
+    const child = ctx.sessions.get(info.id)
+    if (child === undefined) return
+    const parentId = child.header.parentSession
+    if (parentId === undefined) return
+    const parent = ctx.sessions.get(parentId)
+    if (parent === undefined) return
+    const derived = extractIssueFromContext(parent)
+    if (derived === undefined) return
+    const record: IpdAgentRunData = {
+      issueId: derived.issueId,
+      agentId: info.id,
+      action: derived.action,
+      startedAt: new Date().toISOString(),
+      status: 'running',
+    }
+    agentRuns.set(info.id, { controller: new AbortController(), session: parent, record })
+    parent.append('ipd/agent-run', record, { ignorable: true })
+  })
+  ctx.on('subagent/end', (info: SubagentRunEndInfo) => {
+    const entry = agentRuns.get(info.id)
+    if (entry === undefined) return
+    agentRuns.delete(info.id)
+    entry.session.append('ipd/agent-run', {
+      ...entry.record,
+      status: statusFromStopReason(info.stopReason),
+      endedAt: new Date().toISOString(),
+    }, { ignorable: true })
+  })
+}
+
 /** 运行 fix-db.py 更新问题字段 (argv 直接传参, 无 shell 注入). */
 function runFixDbUpdate(config: { workflowRoot: string; pythonBin: string }, issId: string, note: string): Promise<boolean> {
   return new Promise(done => {
@@ -262,7 +328,7 @@ export function apply(ctx: Context, rawConfig: unknown): void {
   registerAgentCommand(ctx, 'analyze', config, agentRuns)
   registerAgentCommand(ctx, 'fix', config, agentRuns)
   registerStopCommand(ctx, agentRuns)
-  registerAgentEndListener(ctx, agentRuns)
+  registerSubagentTracker(ctx, agentRuns)
   registerNoteCommand(ctx, config)
 
   ctx.tools.register(defineTool({
