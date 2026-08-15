@@ -169,7 +169,10 @@ function registerStopCommand(ctx: Context, agentRuns: Map<string, { controller: 
       const agentId = parseIssId(invocation.rawInput)
       if (agentId === '') return { kind: 'error', text: '需要子 agent 会话 id' }
       const entry = agentRuns.get(agentId)
-      if (entry === undefined) return { kind: 'error', text: `未找到运行中的子 agent: ${agentId}` }
+      if (entry === undefined) {
+        // 子 agent 可能已自行结束 (subagent/end 已清理条目): 按已停止处理, 不报错。
+        return { kind: 'success', text: `子 agent ${agentId} 已不在运行中` }
+      }
       entry.controller.abort()
       return { kind: 'success', text: `已请求停止 ${agentId}` }
     },

@@ -325,7 +325,9 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
   /** 行操作状态机: 启动确认中(灰) → 运行中(分析中+停止+查看) → 完成(查看) | 意外结束(失败提示+可重试). */
   const renderActions = (row: DigestIssue): React.JSX.Element => {
     const run = runByIssue.get(row.issId)
-    const running = run?.status === 'running'
+    // 投影帧可能丢失 (子 agent 结束更新未送达); session list 的 running 标志是实时真相, 兜底。
+    const liveStopped = run !== undefined && byId[run.agentId]?.running === false
+    const running = run?.status === 'running' && !liveStopped
     const startingAction = starting.get(row.issId)
     const isStopping = run !== undefined && stopping.has(run.agentId)
     // 修复需 fix-db 已有分析结论 (conclusion 非空) 才允许。
@@ -371,12 +373,14 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
         </>
       )
     }
-    // 意外结束 (aborted/failed): 失败提示 + 回退到可重试按钮。
+    // 意外结束 (aborted/failed, 或投影帧丢失但子 agent 实际已停): 失败提示 + 回退到可重试按钮 + 查看。
     return (
       <>
-        <span style={s.fail}>{run.status === 'aborted' ? '已停止' : '失败'}</span>
+        <span style={s.fail}>{run.status === 'aborted' || liveStopped ? '已停止' : '失败'}</span>
         <button style={{ ...s.action, ...s.actionPrimary }} onClick={() => startAction(row.issId, 'analyze')}>开始分析</button>
         {fixBtn}
+        <button style={{ ...s.action, ...s.viewBtn }} title={run.agentId}
+          onClick={() => { openAgent(current, run.agentId); setOpen(false) }}>查看 ↗</button>
       </>
     )
   }
