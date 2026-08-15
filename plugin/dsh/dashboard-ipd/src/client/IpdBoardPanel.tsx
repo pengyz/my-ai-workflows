@@ -191,6 +191,17 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
   /** fix-db 详情展开的 issId 集合。 */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  /** 刷新进行中 (按钮转圈). */
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshCount = useRef(0)
+  const doRefresh = (): void => {
+    const count = ++refreshCount.current
+    setRefreshing(true)
+    refresh(current)
+    window.setTimeout(() => {
+      if (refreshCount.current === count) setRefreshing(false)
+    }, CONFIRM_MS + 3000)
+  }
   useEffect(() => {
     const tag = document.createElement('style')
     tag.textContent = '@keyframes dsh-ipd-spin { to { transform: rotate(360deg) } }'
@@ -218,6 +229,10 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
     | undefined
   const board = projection?.ipdBoard ?? null
   const agents = projection?.ipdAgents ?? null
+  useEffect(() => {
+    // 板数据更新 (requestId 变化) 即视为刷新完成。
+    setRefreshing(false)
+  }, [board?.requestId])
   // 每问题单最新的 agent-run (后写覆盖).
   const runByIssue = useMemo(() => {
     const map = new Map<string, IpdAgentRunData>()
@@ -364,7 +379,10 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
               {board !== null ? `${board.scope} · 共 ${board.count} 条${board.truncated ? ' · 已截断' : ''}` : '未加载'}
             </span>
             <div style={s.headerRight}>
-              <button style={s.btn} onClick={() => refresh(current)}>刷新</button>
+              <button style={s.btn} onClick={doRefresh} disabled={refreshing}>
+                {refreshing ? <span style={s.spinner} /> : null}
+                刷新
+              </button>
             </div>
           </div>
           {board !== null ? (
