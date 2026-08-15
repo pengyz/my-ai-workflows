@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { DigestIssue, IpdAgentRunData, IpdBoardChatData } from '../types.js'
+import type { DigestIssue, IpdAgentRunData, IpdAgentRunStatus, IpdBoardChatData } from '../types.js'
 
 /** Actions injected from the plugin's apply closure (host round-trips). */
 export interface PanelInjected {
@@ -233,6 +233,25 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
     // 板数据更新 (requestId 变化) 即视为刷新完成。
     setRefreshing(false)
   }, [board?.requestId])
+  // 子 agent 从运行中转为终态时自动刷新看板, 让 fix-db 结论/状态即时生效。
+  const prevAgentStatuses = useRef<ReadonlyMap<string, IpdAgentRunStatus>>(new Map())
+  useEffect(() => {
+    const current = new Map<string, IpdAgentRunStatus>()
+    for (const run of agents ?? []) current.set(run.agentId, run.status)
+    let finished = false
+    for (const [agentId, status] of current) {
+      if (prevAgentStatuses.current.get(agentId) === 'running' && status !== 'running') {
+        finished = true
+        break
+      }
+    }
+    prevAgentStatuses.current = current
+    if (finished) {
+      const timer = window.setTimeout(doRefresh, 300)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [agents])
   // 每问题单最新的 agent-run (后写覆盖).
   const runByIssue = useMemo(() => {
     const map = new Map<string, IpdAgentRunData>()
@@ -345,6 +364,8 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
       return (
         <>
           <span style={s.done}>{run.action === 'analyze' ? '分析完成' : '修复完成'}</span>
+          {run.action === 'analyze' ? fixBtn : null}
+          <button style={s.action} onClick={() => startAction(row.issId, 'analyze')}>重新分析</button>
           <button style={{ ...s.action, ...s.viewBtn }} title={run.agentId}
             onClick={() => { openAgent(current, run.agentId); setOpen(false) }}>查看 ↗</button>
         </>
