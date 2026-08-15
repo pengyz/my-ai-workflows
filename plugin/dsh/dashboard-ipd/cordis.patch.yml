@@ -1,0 +1,6 @@
+# dsh bundle patch layer for @deepseek-ai/dsh-dashboard-ipd.
+# Applied automatically when the package is installed into a profile via
+# `dsh plugin --profile <name> add` (reconcile adds it to dsh.profile.bundles).
+- insert:
+    - id: dashboard-ipd
+      name: '@deepseek-ai/dsh-dashboard-ipd'

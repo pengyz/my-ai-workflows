@@ -37,7 +37,7 @@ INDEX_FILE = DB_DIR / "index.md"
 
 STATUSES = ["analyzing", "conclusion_uploaded", "fixing", "implementing", "mr_created", "merged", "closed"]
 TYPES = ["bugfix", "feature"]
-FIELD_KEYS = {"title", "conclusion", "mr", "merge_status", "backport_mr", "type"}
+FIELD_KEYS = {"title", "conclusion", "note", "mr", "merge_status", "backport_mr", "type"}
 TIME_FMT = "%Y-%m-%dT%H:%M:%S%z"
 
 
@@ -149,7 +149,7 @@ def update_issue(iss_id: str, fields: dict, note: str, status: str) -> None:
         action = status or note or "update"
         timeline.append(f"{now_short()} {action} {note or ''}".rstrip())
         out = [f"# {iss_id} 问题修复记录", ""]
-        for k in ["issId", "type", "title", "status", "conclusion", "mr", "backport_mr", "merge_status", "updated_at"]:
+        for k in ["issId", "type", "title", "status", "conclusion", "note", "mr", "backport_mr", "merge_status", "updated_at"]:
             out.append(f"- {k}: {front.get(k, '')}")
         out += ["", "- timeline:"]
         out += [f"  - {t}" for t in timeline]

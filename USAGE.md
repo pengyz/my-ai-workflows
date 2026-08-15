@@ -19,10 +19,10 @@ cd /path/to/your/project
 ```powershell
 cd $HOME\my-ai-workflows
 python setup.py check   # 环境检查
-python setup.py install # 安装 (junction 软链, 免管理员)
+python setup.py install # 安装 skills 符号链接 (junction 软链, 免管理员) + dsh 插件
 ```
 
-**卸载**：`python setup.py uninstall` 或 `~/my-ai-workflows/setup.sh uninstall`（只删除指向本仓库的链接，真实目录不受影响）
+**卸载**：`python setup.py uninstall` 或 `~/my-ai-workflows/setup.sh uninstall`（删除指向本仓库的符号链接 + 从 dsh profile 移除插件，真实目录不受影响）
 
 ### 2. 验证安装
 
@@ -61,7 +61,7 @@ python $HOME\my-ai-workflows\setup.py check
 **工作流程**：
 1. 获取问题信息（含全部 IPD 评论）
 2. 下载并全量分析日志（时间线/定界/证据链）
-3. 三道子 agent 独立审查门禁：A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查
+3. 四道子 agent 独立审查门禁：A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查 / A4 独立对抗性审查
 4. 审查全过后上传根因结论到 IPD + 本地留档 `.claude/ipd-conclusions/<issId>.md`
 5. 告知可进入修复工作流
 

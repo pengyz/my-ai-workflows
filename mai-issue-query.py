@@ -168,20 +168,28 @@ def fetch_all(client: McpClient, filters: list, page_size: int = 100, max_pages:
 
 
 # ---------- fix-db 关联 ----------
+FIX_DB_DIR = SCRIPT_DIR / "fix-db"
+
+
 def fixdb_status(iss_id: str) -> dict:
+    """读取 fix-db/<issId>.md 的 front-matter (与 fix-db.py 相同格式)。
+
+    直接读文件而非子进程调用 fix-db.py query: --json 全量模式下对数百条问题
+    逐个 spawn python 会引入数十秒延迟, 文件读取是 O(1)。
+    """
     try:
-        r = subprocess.run([sys.executable, str(SCRIPT_DIR / "fix-db.py"), "query", iss_id],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10)
-        if "issId:" not in r.stdout:
-            return {"found": False}
-        front = {}
-        for line in r.stdout.splitlines():
-            m = re.match(r"^- (\w+): (.*)$", line.strip())
-            if m:
-                front[m.group(1)] = m.group(2)
-        return {"found": True, **front}
-    except (OSError, subprocess.TimeoutExpired):
+        text = (FIX_DB_DIR / f"{iss_id}.md").read_text(encoding="utf-8")
+    except OSError:
         return {"found": False}
+    front = {}
+    timeline = []
+    for line in text.splitlines():
+        m = re.match(r"^- ([A-Za-z_][\w]*): (.*)$", line.strip())
+        if m and m.group(1) != "timeline":
+            front[m.group(1)] = m.group(2)
+        elif re.match(r"^\s*- \d{4}-\d{2}-\d{2} ", line.strip()):
+            timeline.append(re.sub(r"^\s*- ", "", line).strip())
+    return {"found": True, **front, "timeline": timeline}
 
 
 MR_BASE = os.environ.get(
@@ -204,19 +212,32 @@ def default_user() -> str:
     sys.exit("✗ 无法确定 IPD 用户名: 请设置 IPD_USER 环境变量")
 
 
-def format_mr(change_id: str, backport: str = "") -> str:
+def format_mr(change_id: str, backport: str = "", fixdb_mr: str = "") -> str:
     links = [f"[!{m}]({MR_BASE}{m})" for m in re.findall(r"merge_requests/(\d+)", change_id or "")]
     if backport:
         links += [f"[!{m}]({MR_BASE}{m})" for m in re.findall(r"!(\d+)", backport)]
-    return ", ".join(links) or "-"
+    if fixdb_mr:
+        links += [f"[!{m}]({MR_BASE}{m})" for m in re.findall(r"!(\d+)", fixdb_mr)]
+    # 去重保序: 同一 MR 在 changeId 与 fix-db 同时出现时只显示一次
+    seen, out = set(), []
+    for l in links:
+        if l not in seen:
+            seen.add(l)
+            out.append(l)
+    return ", ".join(out) or "-"
 
 
 # ---------- 输出 ----------
 def print_table(issues: list, scope: str, as_json: bool) -> None:
     if as_json:
-        out = [{"issId": i.get("issId"), "title": i.get("issueTitle"), "priority": i.get("issuePriority"),
-                "status": i.get("issueStatus"), "component": i.get("issueTestComponent"),
-                "mr": re.findall(r"merge_requests/(\d+)", i.get("changeId") or "")} for i in issues]
+        out = []
+        for i in issues:
+            db = fixdb_status(i.get("issId", ""))
+            out.append({"issId": i.get("issId"), "issueId": i.get("id"), "title": i.get("issueTitle"),
+                        "priority": i.get("issuePriority"), "status": i.get("issueStatus"),
+                        "component": i.get("issueTestComponent"),
+                        "mr": re.findall(r"merge_requests/(\d+)", i.get("changeId") or ""),
+                        "fixdb": db if db.get("found") else None})
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return
     prio = {"Blocker": 0, "Critical": 1, "Major": 2, "Minor": 3, "Trivial": 4}
@@ -227,7 +248,9 @@ def print_table(issues: list, scope: str, as_json: bool) -> None:
     print("|---|---|---|---|---|")
     for it in issues:
         db = fixdb_status(it.get("issId", ""))
-        mr = format_mr(it.get("changeId", ""), db.get("backport_mr") if db.get("found") else "")
+        mr = format_mr(it.get("changeId", ""),
+                       db.get("backport_mr") if db.get("found") else "",
+                       db.get("mr") if db.get("found") else "")
         print(f"| {it.get('issId')} | {it.get('issuePriority')} | {it.get('issueStatus')} | {mr} | {(it.get('issueTitle') or '')[:44]} |")
 
 
@@ -252,7 +275,10 @@ def main() -> None:
         print(f"(提示) {args.scope} 范围不限定 assignee, 结果可能很大, 已设分页上限 500 条", file=sys.stderr)
     issues, truncated = fetch_all(client, filters)
     if not issues:
-        print(f"(空) {args.scope} 范围无匹配问题")
+        if args.as_json:
+            print("[]")
+        else:
+            print(f"(空) {args.scope} 范围无匹配问题")
         return
     print_table(issues, args.scope, args.json)
     if truncated:

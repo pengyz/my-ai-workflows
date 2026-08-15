@@ -1,0 +1,38 @@
+[
+  {
+    "issId": "ISS-202608-00047970A",
+    "title": "跨端传输完成后手机出现两次接收完成通知",
+    "priority": "Critical",
+    "status": "Open",
+    "component": "APP-miclaw-互联互通",
+    "mr": [],
+    "fixdb": { "issId": "ISS-202608-00047970A", "type": "bugfix", "status": "fixing", "merge_status": "pending", "updated_at": "2026-08-15T13:42:07+0800" }
+  },
+  {
+    "issId": "ISS-202608-00050958A",
+    "title": "手机搜PC文档总结成笔记失败",
+    "priority": "Critical",
+    "status": "Open",
+    "component": "APP-miclaw-互联互通",
+    "mr": ["6233"],
+    "fixdb": null
+  },
+  {
+    "issId": "ISS-202608-00051943A",
+    "title": "PC搜手机，带传输意愿的query搜音频没有传输询问",
+    "priority": "Major",
+    "status": "Pending",
+    "component": "PC-miclaw-超级小爱",
+    "mr": ["6270"],
+    "fixdb": { "issId": "ISS-202608-00051943A", "type": "bugfix", "status": "conclusion_uploaded", "mr": "https://git.n.xiaomi.com/ai-framework/osbot/-/merge_requests/6270", "merge_status": "pending", "updated_at": "2026-08-15T14:32:23+0800" }
+  },
+  {
+    "issId": "ISS-202608-00054509A",
+    "title": "三方PC搜索手机，含传输意愿搜索提示没有找到图片",
+    "priority": "Minor",
+    "status": "Resolved",
+    "component": "PC-miclaw-超级小爱",
+    "mr": [],
+    "fixdb": { "issId": "ISS-202608-00054509A", "type": "bugfix", "status": "closed", "merge_status": "merged", "updated_at": "2026-08-15T01:17:54+0800" }
+  }
+]

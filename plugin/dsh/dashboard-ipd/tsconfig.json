@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@deepseek-ai/cordis": ["/home/peng/workspace/deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-tools": ["/home/peng/workspace/deepseek-harness/packages/core/tools/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-commands": ["/home/peng/workspace/deepseek-harness/packages/interaction/commands/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-agent": ["/home/peng/workspace/deepseek-harness/packages/core/agent/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session": ["/home/peng/workspace/deepseek-harness/packages/core/session/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session/types": ["/home/peng/workspace/deepseek-harness/packages/core/session/lib/types/types.d.ts"],
+      "@deepseek-ai/dsh-session-projection": ["/home/peng/workspace/deepseek-harness/packages/session/session-projection/lib/types/index.d.ts"],
+      "@deepseek-ai/dsh-session-projection/types": ["/home/peng/workspace/deepseek-harness/packages/session/session-projection/lib/types/types.d.ts"],
+      "@deepseek-ai/dsh-subagent": ["/home/peng/workspace/deepseek-harness/packages/subagent/subagent/lib/types/index.d.ts"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["src/client"]
+}

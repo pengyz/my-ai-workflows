@@ -105,15 +105,34 @@ mkdir -p .claude/picks
 
 ### Step 3: 逐个 MR Cherry-Pick
 
-对每个 MR 执行完整的 pick → 验证流程：
+对每个 MR 执行完整的 pick → 验证流程。
+
+**显式循环规则（对列表中每个 MR 依次执行）**：
+
+```
+对 MR 列表中的每个 MR 按顺序：
+  ├─ 3.1 获取 MR 信息
+  ├─ 3.2 cherry-pick 其 commits（冲突则解决）
+  ├─ 3.3 编译验证
+  │    ├─ ✓ 通过 → 继续
+  │    └─ ✗ 失败 → 询问用户：回滚该 MR（git reset --hard <pick前commit>）后继续下一个 / 停止
+  ├─ 3.4 运行相关测试
+  │    ├─ ✓ 通过 → 继续
+  │    └─ ✗ 失败 → 分析是否 pick 引入；询问用户：继续 / 回滚该 MR
+  └─ 3.5 记录完成（含记账表）→ 处理下一个 MR
+```
+
+- **只有验证通过（编译 + 测试均 ✓）才进入下一个 MR**。
+- 任一环节失败且用户选择回滚 → 回滚后**跳过该 MR，继续处理列表中下一个 MR**（不中断整批，除非用户要求停止）。
+- 所有决策与结果必须写入 PICK_LOG，保证可中断恢复。
 
 #### 3.1 获取 MR 信息
 
 使用 `glab` 获取 MR 详情：
 
 ```bash
-# 获取 MR 基本信息
-glab mr view !123 --json title,description,author,sourceBranch,targetBranch,commits
+# 获取 MR 基本信息（含 web_url 记账字段）
+glab mr view !123 --json title,description,author,sourceBranch,targetBranch,commits,webUrl
 
 # 提取 commits 列表
 glab mr view !123 --json commits | jq -r '.[].sha'
@@ -124,8 +143,10 @@ glab mr view !123 --json commits | jq -r '.[].sha'
 ## MR !123: <title>
 
 - Author: <author>
+- URL: <web_url>   ← 原 MR 链接，记账用
 - Source: <sourceBranch> → <targetBranch>
 - Commits: <count>
+- 源 Commit IDs: <全部源 commit sha，记账用>
 ```
 
 #### 3.2 Cherry-Pick Commits
@@ -224,7 +245,7 @@ CHANGED_FILES=$(glab mr view !123 --json changes | jq -r '.[].path')
 
 #### 3.5 记录 MR 完成
 
-MR 验证通过后，记录到 PICK_LOG：
+MR 验证通过后，记录到 PICK_LOG。**必须填写记账表**（原 MR 链接 + 源 commit id + pick 后 commit id 一一对应）：
 
 ```markdown
 ### MR !123 Pick 完成 ✓
@@ -233,10 +254,18 @@ MR 验证通过后，记录到 PICK_LOG：
 - Conflicts: <count> resolved
 - Compile: ✓ passed
 - Tests: ✓ <passed>/<total>
-- Picked Commits: <hash-list>
+
+### 记账表（MR !123）
+
+| 原 MR 链接 | 源 commit id (pick 前) | pick 后 commit id | 文件/说明 |
+|-----------|------------------------|-------------------|-----------|
+| https://git.n.xiaomi.com/.../merge_requests/123 | <源sha1> | <新sha1> | <摘要> |
+| ... | <源sha2> | <新sha2> | <摘要> |
 
 ---
 ```
+
+> 记账表为强制项：回流 MR 描述将引用此表，用于审计"哪个源 commit 变成了哪个 pick 后 commit"。
 
 ### Step 4: 所有 MRs Pick 完成总结
 
@@ -442,7 +471,7 @@ python <WF_ROOT>/fix-db.py update <issId> -f backport_mr=!<回流MR编号> -t "�
 
 > **多个 MR 统一提交场景**：一个回流 MR 关联多个源 MR（多个 IPD 单）→ 对每个源 MR 重复上述反查+回填，使回流 MR 反向关联所有被 pick 的 IPD 单（双向可查）。
 
-MR 描述模板：
+MR 描述模板（**必须包含记账表**：原 MR 链接 + pick 前/后 commit id 一一对应）：
 ```markdown
 # 回流 MRs
 
@@ -450,6 +479,13 @@ MR 描述模板：
 
 - !123 - <title> (IPD: ISS-xxx)
 - !456 - <title> (IPD: ISS-yyy)
+
+## 记账表（Pick Commit 映射）
+
+| 原 MR | 原 MR 链接 | 源 commit id (pick 前) | pick 后 commit id | IPD |
+|-------|-----------|------------------------|-------------------|-----|
+| !123 | https://git.n.xiaomi.com/.../merge_requests/123 | <源sha> | <新sha> | ISS-xxx |
+| !456 | https://git.n.xiaomi.com/.../merge_requests/456 | <源sha> | <新sha> | ISS-yyy |
 
 ## 验证结果
 
@@ -496,4 +532,5 @@ MR 描述模板：
 1. **子 agent 必须独立**：不依赖主 agent 的上下文，独立分析
 2. **逻辑一致性 > 代码一致性**：冲突解决后代码可能不同，但功能要等价
 3. **记录完整**：所有决策和结果都记录到 PICK_LOG
-4. **可中断恢复**：如果中途失败，可以基于 PICK_LOG 恢复
+4. **记账表强制**：每个 MR 的 PICK_LOG 与最终回流 MR 描述必须含记账表（原 MR 链接 + 源 commit id + pick 后 commit id 一一对应），缺失视为未完成
+5. **可中断恢复**：如果中途失败，可以基于 PICK_LOG 恢复
