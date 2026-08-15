@@ -84,6 +84,30 @@ python <WF_ROOT>/fix-db.py query <issId>
 ⑥ **成功/失败样本对比**：同一份日志中是否有成功类似操作？对比差异
 ⑦ **异常模式识别**：频繁重试、异常延迟、资源耗尽、状态不一致、消息丢失
 
+**2.2b Android logcat（adb logcat / "284 日志"）分析（强制，不可省略）**：
+
+> Android 端问题**必须**分析系统级 adb logcat（测试要求抓的"284 日志"通常即此）。**仅分析 app 级 debug_log（如 voiceassist 日志）不等于分析了 logcat**——worker/agent 的真实执行、服务进程启动、工具调用、binder 调用、系统调度都只在 logcat 中可见。**未分析 logcat 或 logcat 使用率不足 = 日志分析不完整，门禁必须整体打回。**
+
+**Android logcat 关键日志的可能位置**（按优先级查找）：
+
+1. **bugreport 内层 dumpstate zip**：外层 bugreport zip 解压后，常有一个嵌套的 `bugreport-<device>-<build>-<timestamp>.zip`（如 `bugreport-Xiaomi 17 Ultra-2026-08-14-152110.zip`，169MB 级），其内包含 **`bugreport-<device>-<build>-<timestamp>.txt`（通常 100MB+）——即完整 adb logcat 主缓冲（main/system/events 合并）**。这是 Android 端问题分析的**首要日志源**，必须解压并搜索问题时段。
+2. **系统级进程日志**（logcat 内的关键服务）：
+   - `com.xiaomi.aicr`（小爱 AI Content Retrieval / AI 搜索）：`searchService`（NLS 语义搜索入口）、`clipAlgo`（图像检索算法）、`bertAlgo`（NLP 语义向量）——搜索/检索类问题的核心执行证据
+   - `com.xiaomi.aiservice`：AI 能力服务（`IAIAbility`、`ClipService`）
+   - `com.miui.gallery` / `com.hyper.gallery.plugin`：相册检索执行（binder 调用、库查询）
+   - `com.miui.voiceassist`：超级小爱主进程（UI 层 + 部分 agent 层）
+   - `com.xiaomi.mi_connect_service`：互联服务（A2A 传输层，app_log 与 continuity 日志）
+   - `ActivityManager` / `SmartPower`：进程启动/调度（证明某能力是否被触发）
+   - `am_proc_start` / `am_proc_bound`：进程生命周期
+3. **logcat 内关键检索模式**：`refined-query`、`NLS`/`NLSCapability`、`IClipService`、`IBertAlgo`、`search_status`、`matched_count`、`MediaStore`、`gallery`、`search.*tool`、`tool_call`
+4. **app 级 debug_log**（如 `com.miui.voiceassist/cache/debug_log/*.log`、`com.xiaomi.mi_connect_service/release_log/*`）——作为 logcat 的补充，不能替代
+
+**强制要求**：
+- 必须定位并解压 bugreport 内层 dumpstate zip 中的 `bugreport-*.txt`（logcat 主缓冲），在问题时段搜索上述关键进程/模式
+- 分析报告必须列出**实际使用过的 logcat 文件路径 + 行号 + 原文摘录**（凭证清单必须包含 logcat 条目）
+- 成功/失败样本对比**必须**包含 logcat 证据（如失败样本有 aicr 搜索执行而成功样本无，或反之——这是检索路径选择差异的关键）
+- **未分析 logcat：报告不得进入门禁；门禁核查发现 logcat 未使用或使用率不足 → 整体打回**（见 3.2 A1、3.3 A2 强制项）
+
 **2.3 问题定界（多端日志交叉验证）**：
 - Android 端 / PC(Mac) 端 / 网络中间层逐端检查（请求发出？参数正确？响应收到？错误处理触发？）
 - 定界结论模板：主责（明确的端）+ 多端证据链 + 次责/协同问题
@@ -172,18 +196,19 @@ python <WF_ROOT>/fix-db.py query <issId>
 # IPD 根因分析报告 (<issId>)  [结论版本: vN]
 - 日志时间范围 / 分析时间
 - 0. 整体结论（二值：确定根因 / 无法给出结论 + 2.8 后续动作）
-- 1. 日志概览（文件数/时间跨度/Session 数）
+- 1. 日志概览（文件数/时间跨度/Session 数；**必须含 Android logcat 分析情况：logcat 主缓冲文件路径、是否解压 dumpstate 内层 zip、覆盖时段**）
 - 2. 全量事件时间线
-- 3. Session 统计与成功/失败对比
+- 3. Session 统计与成功/失败对比（Android 端问题必须含 logcat 中成功/失败样本的执行对比）
 - 4. 问题定界（主责 + 多端证据链）
 - 5. 源码分析（仓库/分支/版本 + 全链路代码↔日志对应表 + 无法闭合环节清单）
 - 6. 日志证据 ↔ 源码分析逻辑闭环对照表（2.7 产出，逐环节双向对齐）
 - 7. 根因定位（证据链 + 闭合性验证 + 内部环节置信度标注，仅供内部定位薄弱点）
 - 8. 修复方案（2.9 产出：每项绑定根因环节 + 修复机制 + 止血/长线分层 + 验证方法）
 - 9. 其他发现（潜在问题/性能瓶颈/改进建议）
-- 10. 凭证清单（3.1 规范：实际读取的 file:line + 原文摘录 + 执行操作）
+- 10. 凭证清单（3.1 规范：实际读取的 file:line + 原文摘录 + 执行操作；**Android 端问题必须含 logcat 凭证条目**）
 - 11. 2.8 用户决策记录（若走补日志/复现/源码确认路径：决策人/时间/路径/结果）
 ```
+> Android 端问题：报告第 1 节未说明 logcat 分析情况、第 10 节凭证无 logcat 条目 → 门禁按 2.2b 打回。
 
 ### Step 3: 门禁体系（独立子 agent 复核，流水线）
 
@@ -244,6 +269,11 @@ python <WF_ROOT>/fix-db.py query <issId>
   - 报告中对每个环节的解释是否经得起逐行推敲（代码分支、条件判定、数据流）
   - 复核者自己必须重读关键源码片段与日志原文验证，**不得仅凭报告转述就认可**
 - **执行时间线核查（强制项）**：报告是否给出端到端时间线（精确时间戳、双端对应、各环节耗时）；时间线是否与日志原文逐点一致；时间线是否完整覆盖问题全过程（无跳过时段）
+- **Android logcat 使用核查（强制项，对应 2.2b）**：
+  - **Android 端问题必须核查 logcat 使用**：报告是否分析了系统级 adb logcat（bugreport 内层 dumpstate zip 的 `bugreport-*.txt` 主缓冲），而非仅 app 级 debug_log
+  - **logcat 使用率核查**：问题涉及 Android 端执行（worker 动作/工具调用/服务进程/检索）时，报告凭证中 logcat 条目是否充分——**未使用 logcat、或关键执行环节无 logcat 证据（如 aicr/searchService/clipAlgo/bertAlgo/gallery 进程启动与调用、refined-query、search_status）→ 整体打回**
+  - 复核者亲自打开 bugreport 内层 dumpstate zip 的 logcat 主缓冲，验证报告引用的 logcat file:line 与原文一致、且确属问题时段
+  - 报告声称"手机端未执行/未触发某动作"时，必须用 logcat 反证（如"无 aicr 进程启动记录"需真实回扫 logcat 确认，不能仅凭 app 日志缺记录断言）
 - **结论整体二值化核查（强制项）**：
   - 结论必须是"确定根因"或"无法给出结论"二选一，出现"可能/疑似/大概率/推测"等模糊表述 → 打回要求明确化
   - 出现"A 环节确定、B 环节待补"的混合定谳 → **打回**（整体性结论强制）
@@ -268,6 +298,11 @@ python <WF_ROOT>/fix-db.py query <issId>
 子 agent 审查材料：日志目录 + 分析报告 + attachmentJson 清单 + 2.5 根因结论。检查：
 - **根因结论的日志支撑充分性**：2.5 根因结论的每一个定责环节，在日志中是否有充分、直接的证据；有无"结论需要某条日志佐证但报告中缺失"的环节
 - **日志全量利用复核**：是否漏掉其他 session/事件/成功样本（对照时间线与日志原文逐段回扫，尤其问题发生前后的空档期）
+- **Android logcat 使用核查（强制项，对应 2.2b，Android 端问题必查）**：
+  - **是否解压并分析了 bugreport 内层 dumpstate zip 的 `bugreport-*.txt`（adb logcat 主缓冲）**——仅看 app 级 debug_log 视为未完成 logcat 分析
+  - **logcat 覆盖核查**：问题时段内关键 Android 执行（worker 动作/服务进程启动/工具调用/检索/回传）在 logcat 中是否有对应记录；**关键执行环节 logcat 零命中（如无 aicr/searchService/clipAlgo/bertAlgo/gallery 进程启动或调用）且报告未解释 → 打回**
+  - **logcat 使用率判定**：Android 端问题的报告，凭证中 logcat 条目应覆盖问题时段的关键执行链；**logcat 使用率不足（关键环节缺失 logcat 证据）→ 整体打回，不得以"缺日志"降级为无法给出结论（除非真实回扫 logcat 确认无记录）**
+  - 复核者亲自回扫 bugreport 内层 logcat 主缓冲的问题时段，验证"未触发/未执行/无记录"类断言的真实性
 - **主要原因遗漏检查**：日志中出现的异常/失败/重试/冲突/边界行为，是否都被纳入分析或明确解释过无关性；**有无日志已提示但报告忽略的"更主要原因"**
 - **深度分析强制**：A2 复核者必须亲自回读关键日志时段（不得仅依赖报告引用），验证每条引用与原文一致、无截断取巧
 - **凭证抽查（强制，分级处置）**：抽取 ≥1 条报告中的日志引用，亲自打开日志核对原文与行号；发现可疑时增加抽查；行号轻微偏移/摘录不精确 → 要求修正，凭空捏造 → 伪造打回
