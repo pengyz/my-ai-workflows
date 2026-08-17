@@ -374,6 +374,7 @@ export function apply(ctx: Context, rawConfig: unknown): void {
               additionalProperties: false,
               properties: {
                 issId: { type: 'string', required: true },
+                issueId: { type: 'integer' },
                 title: { type: 'string', required: true },
                 priority: { type: 'string', required: true },
                 status: { type: 'string', required: true },

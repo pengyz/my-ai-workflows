@@ -233,7 +233,7 @@ def print_table(issues: list, scope: str, as_json: bool) -> None:
         out = []
         for i in issues:
             db = fixdb_status(i.get("issId", ""))
-            out.append({"issId": i.get("issId"), "issueId": i.get("id"), "title": i.get("issueTitle"),
+            out.append({"issId": i.get("issId"), "title": i.get("issueTitle"),
                         "priority": i.get("issuePriority"), "status": i.get("issueStatus"),
                         "component": i.get("issueTestComponent"),
                         "mr": re.findall(r"merge_requests/(\d+)", i.get("changeId") or ""),
@@ -275,7 +275,7 @@ def main() -> None:
         print(f"(提示) {args.scope} 范围不限定 assignee, 结果可能很大, 已设分页上限 500 条", file=sys.stderr)
     issues, truncated = fetch_all(client, filters)
     if not issues:
-        if args.as_json:
+        if args.json:
             print("[]")
         else:
             print(f"(空) {args.scope} 范围无匹配问题")
