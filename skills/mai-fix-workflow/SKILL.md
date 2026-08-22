@@ -24,7 +24,7 @@ description: |
 
 ## 前置
 
-环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP、osbot 项目环境、`osbot-eval`（测试）。
+环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP、osbot 项目环境、`osbot-eval`（测试）。WF_ROOT 定位：`python3 wf_root.py --check`（见 mai-env-doctor）。
 
 ---
 

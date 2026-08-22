@@ -233,7 +233,8 @@ def print_table(issues: list, scope: str, as_json: bool) -> None:
         out = []
         for i in issues:
             db = fixdb_status(i.get("issId", ""))
-            out.append({"issId": i.get("issId"), "title": i.get("issueTitle"),
+            # issueId 用于客户端 IPD 链接跳转 (需 dashboard-ipd schema 已声明, DSH 重启后生效)
+            out.append({"issId": i.get("issId"), "issueId": i.get("id"), "title": i.get("issueTitle"),
                         "priority": i.get("issuePriority"), "status": i.get("issueStatus"),
                         "component": i.get("issueTestComponent"),
                         "mr": re.findall(r"merge_requests/(\d+)", i.get("changeId") or ""),

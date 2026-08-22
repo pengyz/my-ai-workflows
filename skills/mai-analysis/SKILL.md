@@ -28,7 +28,7 @@ description: |
 
 ## 前置
 
-仓库根定位（WF_ROOT）：环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > `$HOME/my-ai-workflows` 兜底（与 `mai-env-doctor` 一致）。环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 可用（查询/评论）、**2.4 涉及的全部源码仓库**可用（osbot / miclaw_desktop / ContinuationApp 等，缺哪个在 2.4 ① 向用户确认该仓库路径）。MCP 参数细节见 `ipd-mcp-setup` skill（appAccount/issueId/issId）。
+仓库根定位（WF_ROOT）：运行 `python3 wf_root.py --check`（脚本路径首次可用 `$HOME/my-ai-workflows/wf_root.py`，后续自动定位）。环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 可用（查询/评论）、**2.4 涉及的全部源码仓库**可用（osbot / miclaw_desktop / ContinuationApp 等，缺哪个在 2.4 ① 向用户确认该仓库路径）。MCP 参数细节见 `ipd-mcp-setup` skill（appAccount/issueId/issId）。
 
 ## 工作流程
 

@@ -37,7 +37,7 @@ description: |
 
 ## 前置
 
-环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 配置存在（脚本直连其 API）、`mai-issue-query.py` 可用。
+环境门禁（复用 `mai-env-doctor` / `setup.py`）：`mi-adt` MCP 配置存在（脚本直连其 API）、`mai-issue-query.py` 可用。WF_ROOT 定位：`python3 wf_root.py --check`（见 mai-env-doctor）。
 
 > **为什么不直接调 mi-adt 工具**：`M_issueQuery` 返回每条问题 300+ 全字段（含工具 schema 说明），单次响应 200KB+，会撑爆上下文且输出截断。因此查询由 **`mai-issue-query.py` 脚本直连 mi-adt HTTP API** 完成，LLM 只拿到精简结果。
 

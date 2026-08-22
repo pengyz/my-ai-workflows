@@ -5,7 +5,7 @@
 ## 工作流列表
 
 ### 1. 问题根因分析 (mai-analysis)
-获取问题单 → 下载并全量分析日志 → 源码分析 → 日志↔源码闭环 → **四道子 agent 独立审查门禁**（A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查 / A4 独立对抗性审查）→ 上传根因结论到 IPD + 本地留档。
+获取问题单 → 下载并全量分析日志 → 源码分析 → 日志↔源码闭环 → **收敛式单门禁核实**（根因定性 Agent 一次做全 → 单一门禁 Agent 核实全部维度 → 驳回则携反馈收敛重跑，默认 ≤2 轮）→ 上传根因结论到 IPD + 本地留档。
 
 要点：Android logcat 强制全量分析、日志完备性前置门禁、结论收敛后复核、已有定性结论改由 LLM 判定。
 
@@ -284,13 +284,15 @@ pnpm dsh plugin --profile ipd add file:~/my-ai-workflows/plugin/dsh/dashboard-ip
 ├── setup.sh                     # Unix 便捷入口 (exec python3 setup.py)
 ├── fix-db.py                    # 问题修复数据库命令
 ├── mai-issue-query.py           # 问题查询脚本(直连 mi-adt API, 零 LLM 上下文; --json 内联 fix-db)
+├── wf_root.py                   # 共享 WF_ROOT 定位脚本(各 skill Step 0 统一调用)
 ├── fix-db/                      # 修复数据库数据 (每问题一 md + 派生 index.md)
+├── tests/                       # 单元测试 (pytest)
 ├── .env-status.json             # 环境检查结果 (setup.py check 生成, 工作流门禁依据)
 ├── plugin/
 │   └── dsh/                     # 配套 dsh 插件 (每插件一目录, 声明 dsh.bundle)
 │       └── dashboard-ipd/       # IPD/MR 状态看板插件
 ├── skills/
-│   ├── mai-analysis/            # IPD 根因分析 + 结论上传 (四道门禁 A1-A4)
+│   ├── mai-analysis/            # IPD 根因分析 + 结论上传 (单门禁 G 收敛)
 │   ├── mai-env-doctor/          # 运行时环境深度诊断 (MCP 连通性实测等)
 │   ├── mai-fix-workflow/        # IPD 问题修复 (需先有 mai-analysis 完整结论)
 │   ├── mai-implement-workflow/  # 功能开发工作流
@@ -300,6 +302,17 @@ pnpm dsh plugin --profile ipd add file:~/my-ai-workflows/plugin/dsh/dashboard-ip
 │   └── mai-osbot-test/          # 测试缺口探测与执行编排 (Analyze+Eval)
 └── docs/                        # 辅助文档 (如 IPD 富文本格式)
 ```
+
+### 工作流输出目录约定
+
+各工作流在项目目录下产出审查/结论/报告文件，按功能分目录：
+
+| 目录 | 用途 | 使用者 |
+|------|------|--------|
+| `.claude/ipd-conclusions/` | IPD 根因分析报告 + 结论 + 审查报告 | mai-analysis, mai-fix-workflow |
+| `.claude/ipd-implementations/` | 功能开发方案 + 用例集 + 审查报告 | mai-implement-workflow |
+| `.claude/reviews/` | 代码审查报告 | mai-mr-review-workflow |
+| `.claude/picks/` | Cherry-pick 记录 | mai-mr-pick-workflow |
 
 ## 依赖
 

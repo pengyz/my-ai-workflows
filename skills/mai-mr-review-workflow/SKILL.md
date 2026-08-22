@@ -22,37 +22,11 @@ description: 完整的 MR review 工作流：代码审查 → 多轮验证 → �
 
 1. 定位仓库根并读状态文件（环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > 默认位置兜底）：
 
-   **Linux/macOS (bash)**：
    ```bash
-   WF_ROOT="${MY_AI_WORKFLOWS:-}"
-   if [ -z "$WF_ROOT" ]; then
-     for d in "$HOME/.config/opencode/skills" "$HOME/.claude/skills" "$HOME/.codex/skills" "$PWD/.agents/skills" "$PWD/.claude/skills"; do
-       L="$(readlink -f "$d/mai-mr-review-workflow" 2>/dev/null || true)"
-       if [ -n "$L" ] && [ -f "$L/SKILL.md" ]; then
-         WF_ROOT="$(cd "$(dirname "$L")/.." && pwd)"
-         break
-       fi
-     done
-   fi
-   WF_ROOT="${WF_ROOT:-$HOME/my-ai-workflows}"
-   cat "$WF_ROOT/.env-status.json" 2>/dev/null || echo "MISSING"
+   WF_ROOT="$(python3 <仓库根>/wf_root.py)"
+   python3 <仓库根>/wf_root.py --check   # 输出 WF_ROOT + STATUS 判定
    ```
-
-   **Windows (PowerShell)**：
-   ```powershell
-   $WF_ROOT = $env:MY_AI_WORKFLOWS
-   if (-not $WF_ROOT) {
-     foreach ($d in @("$HOME\.config\opencode\skills", "$HOME\.claude\skills", "$HOME\.codex\skills", "$PWD\.agents\skills", "$PWD\.claude\skills")) {
-       $item = Get-Item "$d\mai-mr-review-workflow" -ErrorAction SilentlyContinue
-       if ($item -and $item.Target) {
-         $WF_ROOT = Split-Path (Split-Path $item.Target)
-         break
-       }
-     }
-   }
-   if (-not $WF_ROOT) { $WF_ROOT = "$HOME\my-ai-workflows" }
-   if (Test-Path "$WF_ROOT\.env-status.json") { Get-Content "$WF_ROOT\.env-status.json" } else { "MISSING" }
-   ```
+   > `<仓库根>` 首次可用 `$HOME/my-ai-workflows`；后续由脚本自动定位。
 2. 判定（不做任何工具探测）：
    - `required_ok=true` 且 `checked_at` 未超过 `ttl_days` → 直接继续 Step 1
    - 文件不存在 / `required_ok=false` / 已过期 → 提示用户：`请先运行 <WF_ROOT>/setup.py check (Unix 也可用 <WF_ROOT>/setup.sh check) 完成一次性环境配置`，用户确认后继续

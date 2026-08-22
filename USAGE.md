@@ -61,8 +61,8 @@ python $HOME\my-ai-workflows\setup.py check
 **工作流程**：
 1. 获取问题信息（含全部 IPD 评论）
 2. 下载并全量分析日志（时间线/定界/证据链）
-3. 四道子 agent 独立审查门禁：A1 根因定性复核 / A2 日志信息利用率 / A3 IPD 评论核查 / A4 独立对抗性审查
-4. 审查全过后上传根因结论到 IPD + 本地留档 `.claude/ipd-conclusions/<issId>.md`
+3. 收敛式单门禁核实：根因定性 Agent 一次做全 → 单一门禁 Agent 核实全部维度 → 驳回则携反馈收敛重跑（默认 ≤2 轮）
+4. 收敛通过后上传根因结论到 IPD + 本地留档 `.claude/ipd-conclusions/<issId>.md`
 5. 告知可进入修复工作流
 
 ### 场景 2：IPD 问题修复（mai-fix-workflow）

@@ -16,7 +16,7 @@ description: |
 
 - 工作流运行时某依赖调用失败（MCP 报错、glab 报错、编译路径不对）→ 用本 skill 定位根因
 - 用户主动要求诊断："环境检查"、"doctor"
-- 仓库根定位：环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > `$HOME/my-ai-workflows` 兜底（与工作流 Step 0 相同）
+- 仓库根定位：`python3 wf_root.py`（环境变量 `MY_AI_WORKFLOWS` > 软链接反查 > `$HOME/my-ai-workflows` 兜底，与工作流 Step 0 相同）
 
 ## 执行流程
 
