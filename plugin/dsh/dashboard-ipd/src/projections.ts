@@ -6,7 +6,6 @@
  * @module dashboard-ipd/projections
  */
 
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection/types'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -15,21 +14,26 @@ import type {} from './events.js'
 import type { IpdAgentRunData, IpdBoardChatData } from './types.js'
 
 /** Latest whole board snapshot; `null` before the first `ipd/board` event. */
-export const ipdBoardProjection: ProjectionDefinition<'ipdBoard', IpdBoardChatData | null> = {
-  key: 'ipdBoard',
-  schema: z.any(),
-  init: () => null,
-  apply: (state, event) => event.type === 'ipd/board' ? event.data as IpdBoardChatData : state,
-  view: state => state,
+export const ipdBoardProjection = {
+  key: 'ipdBoard' as const,
+  stateSchema: z.any(),
+  init: () => null as IpdBoardChatData | null,
+  apply: (state: IpdBoardChatData | null, event: SessionEvent) =>
+    event.type === 'ipd/board' ? event.data as IpdBoardChatData : state,
+  view: (state: IpdBoardChatData | null) => state,
+  wire: {
+    viewSchema: z.any(),
+    view: (state: IpdBoardChatData | null) => state,
+  },
   stateVersion: 1,
 }
 
 /** Spawned agent runs in log order, bounded to the latest 50; same agentId updates in place. */
-export const ipdAgentsProjection: ProjectionDefinition<'ipdAgents', readonly IpdAgentRunData[] | null> = {
-  key: 'ipdAgents',
-  schema: z.union([z.array(z.any()), z.null()]),
-  init: () => null,
-  apply: (state, event): readonly IpdAgentRunData[] | null => {
+export const ipdAgentsProjection = {
+  key: 'ipdAgents' as const,
+  stateSchema: z.any(),
+  init: () => null as readonly IpdAgentRunData[] | null,
+  apply: (state: readonly IpdAgentRunData[] | null, event: SessionEvent): readonly IpdAgentRunData[] | null => {
     if (event.type !== 'ipd/agent-run') return state
     const run = event.data as IpdAgentRunData
     if (state === null) return [run]
@@ -39,7 +43,11 @@ export const ipdAgentsProjection: ProjectionDefinition<'ipdAgents', readonly Ipd
     next[index] = run
     return next
   },
-  view: state => state,
+  view: (state: readonly IpdAgentRunData[] | null) => state,
+  wire: {
+    viewSchema: z.any(),
+    view: (state: readonly IpdAgentRunData[] | null) => state,
+  },
   stateVersion: 2,
 }
 

@@ -21,16 +21,16 @@ export function apply(ctx: ClientContext): void {
     id: 'ipd-dashboard',
     inject: (): PanelInjected => ({
       refresh: (sessionId) => {
-        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, '/ipd-board')
+        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, '/ipd-board', [])
       },
       runAction: (sessionId, action, issId) => {
-        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-${action} ${issId}`)
+        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-${action} ${issId}`, [])
       },
       stop: (sessionId, agentId) => {
-        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-stop ${agentId}`)
+        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-stop ${agentId}`, [])
       },
       saveNote: (sessionId, issId, text) => {
-        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-note ${issId} ${text}`)
+        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-note ${issId} ${text}`, [])
       },
       openAgent: (sessionId, agentId) => {
         // 子 agent 会话在 session list 中 (parentId 谱系), 直接 open 最稳 —
