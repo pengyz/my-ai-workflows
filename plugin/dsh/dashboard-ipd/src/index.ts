@@ -115,7 +115,7 @@ function parseIssId(raw: string): string {
   return raw.trim().split(/\s+/)[0] ?? ''
 }
 
-/** 注册一个面板动作命令: spawn 子 agent 执行分析/修复并记录 `ipd/agent-run`。 */
+/** 注册一个面板动作命令: 启动 continuable 子 agent 执行分析/修复并记录 `ipd/agent-run`。 */
 function registerAgentCommand(
   ctx: Context,
   action: 'analyze' | 'fix',
@@ -135,26 +135,28 @@ function registerAgentCommand(
       if (!/^ISS-\d/.test(issId)) {
         return { kind: 'error', text: '需要 ISS-xxx 问题单号' }
       }
-      // 独立 AbortController: 命令返回后子 agent 继续跑, 停止由 /ipd-stop 触发。
       const controller = new AbortController()
-      const run = await ctx.subagents.start('spawn', {
-        label: `${action}: ${issId}`,
-        prompt: [{
-          type: 'text',
-          text: `对 IPD 问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}, 使用 ${skill} 工作流。`,
-        }],
-        parent: invocation.agent,
+      const label = `${action}: ${issId}`
+      // startContinuable 建立持久可续子 agent：面板可监控、可追加信息、可终止。
+      const started = await ctx.subagents.startContinuable({
+        provider: 'spawn',
+        label,
+        request: {
+          prompt: [{
+            type: 'text',
+            text: `对 IPD 问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}, 使用 ${skill} 工作流。`,
+          }],
+          parent: invocation.agent,
+          maxDepth: 3,
+        },
         signal: controller.signal,
-        maxDepth: 3,
       })
       const record: IpdAgentRunData = {
-        issueId: issId, agentId: run.id, action, startedAt: new Date().toISOString(), status: 'running',
+        issueId: issId, agentId: started.childId, action, startedAt: new Date().toISOString(), status: 'running',
       }
-      agentRuns.set(run.id, { controller, session: invocation.agent.session, record })
+      agentRuns.set(started.childId, { controller, session: invocation.agent.session, record })
       invocation.agent.session.append('ipd/agent-run', record, { ignorable: true })
-      // 终态由 subagent/end 监听回写; 这里只负责收尾资源。
-      void run.result.then(() => run.dispose()).catch(() => run.dispose())
-      return { kind: 'success', text: `已启动${isAnalyze ? '分析' : '修复'}子 agent (${run.id}) 处理 ${issId}` }
+      return { kind: 'success', text: `已启动${isAnalyze ? '分析' : '修复'}子 agent (${started.childId}) 处理 ${issId}` }
     },
   })
 }
