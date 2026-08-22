@@ -30,7 +30,10 @@ export function apply(ctx: ClientContext): void {
         if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-stop ${agentId}`, [])
       },
       saveNote: (sessionId, issId, text) => {
-        if (sessionId !== undefined) void ctx.remote.commands.execute(sessionId, `/ipd-note ${issId} ${text}`, [])
+        if (sessionId === undefined) return
+        // await fix-db 写入后再刷新看板，避免写入竞态导致标注丢失。
+        void ctx.remote.commands.execute(sessionId, `/ipd-note ${issId} ${text}`, [])
+          .then(() => { void ctx.remote.commands.execute(sessionId, '/ipd-board', []) })
       },
       openAgent: (sessionId, agentId) => {
         // 子 agent 会话在 session list 中 (parentId 谱系), 直接 open 最稳 —
