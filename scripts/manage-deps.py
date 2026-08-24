@@ -622,6 +622,29 @@ def install_all():
                 osbot_path = Path(osbot['path'])
                 install_project_skills(osbot_path)
 
+    # 4. 检查并安装全局 Skill
+    print_section("全局 Skill (小米 Agentic Hub)")
+
+    global_skills_installed = check_global_skills_installed()
+    all_global_installed = all(global_skills_installed.values())
+
+    if all_global_installed:
+        print_success("所有全局 skill 已安装")
+    else:
+        print_warning("部分全局 skill 未安装")
+        print_info(f"需要安装的 skill: {', '.join(s for s, installed in global_skills_installed.items() if not installed)}")
+
+        install = input("是否安装全局 skill? (Y/n): ").strip().lower()
+        if install != 'n':
+            # 运行安装脚本
+            install_script = PROJECT_ROOT / "scripts" / "install-global-skills.sh"
+            if install_script.exists():
+                print_info("运行全局 skill 安装脚本...")
+                subprocess.run(["bash", str(install_script)], check=False)
+            else:
+                print_error("安装脚本不存在")
+                print_info("请手动安装: https://agentichub.mioffice.cn")
+
 def setup_all():
     """交互式配置所有依赖"""
     print_header("交互式配置向导")
