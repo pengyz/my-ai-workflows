@@ -23,7 +23,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fetchBoard, DEFAULT_LIMIT } from './aggregate.js'
 import type {} from './events.js'
@@ -152,59 +152,7 @@ function parseIssId(raw: string): string {
   return raw.trim().split(/\s+/)[0] ?? ''
 }
 
-/**
- * 读取 skill SKILL.md 并构建 system-reminder 注入内容。
- * 提取关键步骤、工具、约束，减少 LLM 探索次数。
- */
-function buildSkillContext(workflowRoot: string, skillName: string): string {
-  const skillPath = resolve(workflowRoot, 'skills', skillName, 'SKILL.md')
-  if (!existsSync(skillPath)) {
-    return `[skill ${skillName} 未找到: ${skillPath}]`
-  }
-  try {
-    const content = readFileSync(skillPath, 'utf-8')
-    // 提取关键部分：触发方式、前置、工作流程步骤、输出、门禁、收敛
-    const sections: string[] = []
-    const lines = content.split('\n')
-    let currentSection = ''
-    let inTargetSection = false
-    for (const line of lines) {
-      // 捕获标题
-      const headerMatch = line.match(/^(#{1,4})\s+(.+)/)
-      if (headerMatch !== null && headerMatch[1] !== undefined && headerMatch[2] !== undefined) {
-        currentSection = headerMatch[2]
-        // 判断是否进入目标 section
-        inTargetSection = (
-          currentSection.includes('触发') ||
-          currentSection.includes('前置') ||
-          currentSection.includes('Step') ||
-          currentSection.includes('输出') ||
-          currentSection.includes('门禁') ||
-          currentSection.includes('收敛') ||
-          currentSection.includes('判定')
-        )
-      }
-      // 收集目标 section 的内容
-      if (inTargetSection) {
-        sections.push(line)
-      }
-    }
-    // 如果提取内容太少，返回摘要
-    if (sections.length < 20) {
-      const summaryMatch = content.match(/description:\s*\|?\s*\n([\s\S]*?)(?=\n---|\n#)/)
-      const summary = summaryMatch !== null && summaryMatch[1] !== undefined ? summaryMatch[1].trim() : skillName
-      return `<skill-summary>\n${summary}\n</skill-summary>\n\n完整 skill 文档路径: ${skillPath}\n请先读取该文件了解详细工作流程。`
-    }
-    // 限制输出长度，避免过大
-    const output = sections.join('\n')
-    if (output.length > 16000) {
-      return output.slice(0, 16000) + '\n\n... [内容截断，请读取完整文档]'
-    }
-    return output
-  } catch {
-    return `[读取 ${skillName} 失败]`
-  }
-}
+/** 已移除 buildSkillContext：skill 内容由 dsh 的 available_skills 机制自动注入，避免重复。 */
 
 /** 注册一个面板动作命令: 启动 continuable 子 agent 执行分析/修复并记录 `ipd/agent-run`。 */
 function registerAgentCommand(
@@ -228,26 +176,24 @@ function registerAgentCommand(
       }
       const controller = new AbortController()
       const label = `${action}: ${issId}`
-      // 读取 skill 内容，构建 system-reminder 注入
-      const workflowRoot = config.workflowRoot ?? expandHome(DEFAULT_WORKFLOW_ROOT)
-      const skillContext = buildSkillContext(workflowRoot, skill)
+      // 构建精简 prompt：只注入关键约束和执行指引，skill 内容由 dsh 自动注入
       const constraints = SKILL_CONSTRAINTS[skill] ?? []
       const tools = SKILL_TOOLS[skill] ?? []
       const promptText = [
         `<system-reminder>`,
         `你是 IPD 问题${isAnalyze ? '分析' : '修复'}专家。当前任务：对问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}。`,
         ``,
-        `## 可用 Skill: ${skill}`,
-        skillContext,
-        ``,
-        `## 可用工具`,
-        ...tools,
+        `## 执行指引`,
+        `1. 调用 skill 工具加载 ${skill}`,
+        `2. 按照 skill 中的工作流程严格执行`,
+        `3. 注意以下关键约束`,
         ``,
         `## 关键约束`,
         ...constraints.map((c, i) => `${i + 1}. ${c}`),
-        `</system-reminder>`,
         ``,
-        `请按照 ${skill} 工作流执行，首先读取完整 skill 文档：${workflowRoot}/skills/${skill}/SKILL.md`,
+        `## 可用工具`,
+        ...tools,
+        `</system-reminder>`,
       ].join('\n')
       // startContinuable 建立持久可续子 agent：面板可监控、可追加信息、可终止。
       const started = await ctx.subagents.startContinuable({
