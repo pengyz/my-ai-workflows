@@ -1,0 +1,88 @@
+name: Verify Skills
+
+on:
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'fix-db.py'
+      - 'scripts/verify-skills.py'
+      - '.github/workflows/verify-skills.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'skills/**'
+      - 'fix-db.py'
+      - 'scripts/verify-skills.py'
+
+jobs:
+  verify-skills:
+    runs-on: ubuntu-latest
+    name: Verify Skill Files
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Verify all skills
+        run: python3 scripts/verify-skills.py
+
+      - name: Verify changed skills (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # 获取 PR 修改的文件
+          changed_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | grep -E 'skills/.*/SKILL\.md$' || true)
+
+          if [ -n "$changed_files" ]; then
+            echo "📋 验证修改的 skill 文件:"
+            echo "$changed_files"
+            echo ""
+
+            # 对每个修改的文件运行单独验证
+            for file in $changed_files; do
+              skill_name=$(echo "$file" | sed 's|skills/\([^/]*\)/.*|\1|')
+              echo "🔍 验证: $skill_name"
+              python3 scripts/verify-skills.py -s "$skill_name"
+            done
+          else
+            echo "✅ 没有修改 skill 文件"
+          fi
+
+      - name: Check fix-db.py status machine
+        run: |
+          # 验证 fix-db.py 的状态机定义
+          echo "🔍 验证 fix-db.py 状态机..."
+          python3 -c "
+          import sys
+          sys.path.insert(0, '.')
+          # 读取 STATUSES 定义
+          with open('fix-db.py', 'r') as f:
+              content = f.read()
+              if 'STATUSES = [' in content:
+                  print('✅ STATUSES 定义存在')
+              else:
+                  print('❌ STATUSES 定义缺失')
+                  sys.exit(1)
+          "
+
+      - name: Generate verification report
+        if: always()
+        run: |
+          echo "📊 生成验证报告..."
+          python3 scripts/verify-skills.py --verbose > verification-report.txt 2>&1 || true
+          cat verification-report.txt
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: verification-report
+          path: verification-report.txt
+          retention-days: 7

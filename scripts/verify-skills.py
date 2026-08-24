@@ -304,18 +304,57 @@ def print_report(all_issues: Dict[str, List[SkillIssue]], verbose: bool = False)
         return True
 
 
+def get_changed_skills() -> List[str]:
+    """获取 git 修改的 skill 文件"""
+    import subprocess
+
+    try:
+        # 获取暂存区修改的文件
+        result = subprocess.run(
+            ['git', 'diff', '--cached', '--name-only', '--diff-filter=ACM'],
+            capture_output=True, text=True, cwd=PROJECT_ROOT
+        )
+        if result.returncode != 0:
+            return []
+
+        changed_files = result.stdout.strip().split('\n')
+        skills = set()
+        for file in changed_files:
+            # 匹配 skills/<name>/SKILL.md 模式
+            match = re.match(r'skills/([^/]+)/SKILL\.md$', file)
+            if match:
+                skills.add(match.group(1))
+        return list(skills)
+    except Exception:
+        return []
+
+
 def main():
     """主函数"""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='Skill 静态验证')
     parser.add_argument('--verbose', '-v', action='store_true', help='显示详细信息')
     parser.add_argument('--fix', action='store_true', help='自动修复可修复的问题')
     parser.add_argument('--skill', '-s', help='验证指定的 skill')
-    
+    parser.add_argument('--changed-only', '-c', action='store_true', help='只验证 git 修改的 skill')
+
     args = parser.parse_args()
-    
-    if args.skill:
+
+    if args.changed_only:
+        changed_skills = get_changed_skills()
+        if not changed_skills:
+            print("✅ 没有修改 skill 文件")
+            sys.exit(0)
+        print(f"🔍 验证修改的 skill: {', '.join(changed_skills)}")
+        all_issues = {}
+        for skill_name in changed_skills:
+            skill_dir = SKILLS_DIR / skill_name
+            if skill_dir.exists():
+                issues = verify_skill(skill_dir)
+                if issues:
+                    all_issues[skill_name] = issues
+    elif args.skill:
         skill_dir = SKILLS_DIR / args.skill
         if not skill_dir.exists():
             print(f"❌ Skill 不存在: {args.skill}")
@@ -323,9 +362,9 @@ def main():
         all_issues = {args.skill: verify_skill(skill_dir)}
     else:
         all_issues = verify_all_skills()
-    
+
     success = print_report(all_issues, args.verbose)
-    
+
     sys.exit(0 if success else 1)
 
 
