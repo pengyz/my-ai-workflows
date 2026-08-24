@@ -544,3 +544,10 @@ mai-osbot-test analyze --mr https://git.../6278
 3. **不替代 QA**
    - 研发视角的测试覆盖（快速反馈 + 硬判据）
    - QA 负责完整测试覆盖和探索性测试
+
+## 依赖
+
+- 项目: osbot 仓库 - 测试代码和用例
+- CLI: `gradle` - 编译和测试执行
+- Skills: `osbot-eval` - 用例执行引擎
+- 工具: `adb` - Android 设备连接（双端测试）

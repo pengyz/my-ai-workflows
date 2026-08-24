@@ -23,13 +23,20 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SKILLS_DIR = PROJECT_ROOT / "skills"
 
 # 必需章节（按优先级排序）
+# 支持多种章节名称变体
 REQUIRED_SECTIONS = {
-    'trigger': ['触发', '触发方式', 'trigger'],
-    'prerequisite': ['前置', 'prerequisite', '依赖'],
-    'steps': ['Step', '步骤', '工作流程', '工作流'],
-    'output': ['输出', 'output'],
-    'error': ['错误处理', 'error', '异常'],
-    'dependencies': ['依赖', 'dependencies'],
+    'trigger': ['触发', '触发方式', 'trigger', '调用时机', '使用方式'],
+    'prerequisite': ['前置', 'prerequisite', '依赖检查', '环境要求', '环境门禁'],
+    'steps': ['Step', '步骤', '工作流程', '工作流', '执行流程', '流程', '阶段'],
+    'output': ['输出', 'output', '结果', '报告', '完成报告', '统计', '结论'],
+    'error': ['错误处理', 'error', '异常', '失败', '问题'],
+    'dependencies': ['依赖', 'dependencies', '工具', '环境'],
+}
+
+# 可选章节（有更好，没有也可以）
+OPTIONAL_SECTIONS = {
+    'prerequisite': True,  # 前置章节是可选的，有些 skill 可能在触发方式中说明
+    'error': True,  # 错误处理是可选的
 }
 
 # 有效路径占位符
@@ -79,16 +86,25 @@ def verify_skill_structure(skill_path: Path, skill_name: str) -> List[SkillIssue
     for line_num, line in enumerate(lines, 1):
         if line.startswith('## ') or line.startswith('### '):
             section_title = line.lstrip('#').strip()
+            # 移除 emoji 前缀（如 🎯、📋、🔍 等）
+            section_title_clean = re.sub(r'^[\U0001F300-\U0001F9FF\u2600-\u26FF\u2700-\u27BF]+\s*', '', section_title)
             for section_key, keywords in REQUIRED_SECTIONS.items():
-                if any(keyword in section_title for keyword in keywords):
+                if any(keyword in section_title_clean or keyword in section_title for keyword in keywords):
                     found_sections.add(section_key)
     
     for section_key, keywords in REQUIRED_SECTIONS.items():
         if section_key not in found_sections:
-            issues.append(SkillIssue(
-                skill_name, 'warning', 'structure',
-                f'缺少必需章节: {keywords[0]} (建议添加包含 {"/".join(keywords[:2])} 的章节)'
-            ))
+            # 检查是否是可选章节
+            if section_key in OPTIONAL_SECTIONS:
+                issues.append(SkillIssue(
+                    skill_name, 'info', 'structure',
+                    f'缺少可选章节: {keywords[0]} (建议添加包含 {"/".join(keywords[:2])} 的章节)'
+                ))
+            else:
+                issues.append(SkillIssue(
+                    skill_name, 'warning', 'structure',
+                    f'缺少必需章节: {keywords[0]} (建议添加包含 {"/".join(keywords[:2])} 的章节)'
+                ))
     
     # 2. 检查步骤编号连续性
     step_numbers = []

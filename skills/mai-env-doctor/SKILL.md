@@ -210,3 +210,11 @@ readlink -f ~/.claude/skills/ipd-fix-workflow 2>/dev/null
 | ipd-fix-workflow | 出错时引用 | A、C | D（osbot-eval，不跑测试可跳过） |
 | mai-mr-review-workflow | 出错时引用 | B、C、D | A（mi-adt，不关联 IPD 可跳过） |
 | mai-mr-pick-workflow | 出错时引用 | B、C、D（osbot-eval） | - |
+
+## 依赖
+
+- MCP: `mi-adt` - IPD 问题库连通性测试
+- CLI: `glab` - GitLab API 操作
+- 项目: osbot 仓库 - 项目环境检查
+- Skills: `osbot-eval` / `osbot-review` / `osbot-mr-preflight` / `osbot-trace-viz` - 项目级 skill 检查
+- 脚本: `wf_root.py` - 工作流根目录定位
