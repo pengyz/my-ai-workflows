@@ -469,6 +469,22 @@ def run_check() -> None:
     else:
         print(f"{RED}✗ 存在缺失的必需依赖, 请按上方修复指引处理后重新运行{NC}")
         print(f"{YELLOW}提示: 工作流运行时如遇工具调用失败, 也会提示运行 setup.py check 定位问题{NC}")
+
+    # 运行 manage-deps.py check
+    print()
+    print(f"{BLUE}运行详细依赖检查...{NC}")
+    manage_deps = SCRIPT_DIR / "scripts" / "manage-deps.py"
+    if manage_deps.exists():
+        result = subprocess.run(
+            [sys.executable, str(manage_deps), "check"],
+            capture_output=True, text=True, cwd=SCRIPT_DIR
+        )
+        print(result.stdout)
+        if result.returncode != 0:
+            print(f"{YELLOW}提示: 运行 python3 scripts/manage-deps.py setup 可自动配置依赖{NC}")
+    else:
+        print(f"{YELLOW}⚠️ manage-deps.py 不存在，跳过详细检查{NC}")
+
     write_status_file()
 
 

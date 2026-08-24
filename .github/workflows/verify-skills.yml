@@ -16,9 +16,26 @@ on:
       - 'scripts/verify-skills.py'
 
 jobs:
+  verify-deps:
+    runs-on: ubuntu-latest
+    name: Verify Dependencies
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Check dependencies
+        run: python3 scripts/manage-deps.py check
+
   verify-skills:
     runs-on: ubuntu-latest
     name: Verify Skill Files
+    needs: verify-deps
 
     steps:
       - name: Checkout repository

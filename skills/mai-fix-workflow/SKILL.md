@@ -87,6 +87,18 @@ description: |
 
 ## 前置
 
+**一键依赖检查**（推荐，执行前运行）：
+
+```bash
+python3 <WF_ROOT>/scripts/manage-deps.py check
+```
+
+如果检查失败，运行以下命令自动修复：
+
+```bash
+python3 <WF_ROOT>/scripts/manage-deps.py setup
+```
+
 **依赖检查表**（执行前逐项确认）：
 
 | 依赖项 | 检查方式 | 不可用时处理 |
