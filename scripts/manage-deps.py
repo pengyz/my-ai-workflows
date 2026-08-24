@@ -173,7 +173,14 @@ GLOBAL_SKILLS = [
 SKILL_INSTALL_GUIDES = {
     'glab': {
         'source': 'https://agentichub.mioffice.cn/skills/2025',
-        'description': 'GitLab CLI skill',
+        'description': 'GitLab 全能操作 skill（MR/Issue/CI/Pipeline/仓库/Release 等）',
+        'features': [
+            'MR 创建/查看/审查/合并/评论/更新',
+            'Issue 创建/筛选/评论/关闭/看板',
+            'CI/CD Pipeline 查看/运行/追踪/重试',
+            '仓库/Release/Label/Variable/Runner 管理',
+            '自动环境初始化和 Token 认证',
+        ],
         'install_steps': [
             '1. 访问 Agentic Hub: https://agentichub.mioffice.cn/skills/2025',
             '2. 点击"下载"按钮下载 skill',
@@ -183,7 +190,13 @@ SKILL_INSTALL_GUIDES = {
     },
     'ipd-mcp-setup': {
         'source': 'https://agentichub.mioffice.cn/skills/526',
-        'description': 'IPD 问题库 MCP 配置 skill',
+        'description': 'IPD 问题库 ADT MCP Server 配置与使用',
+        'features': [
+            '配置 MCP-HUB 连接 IPD 问题库',
+            '查询/创建/更新问题单',
+            '问题评论管理、状态流转',
+            '操作日志查询、问题数量统计',
+        ],
         'install_steps': [
             '1. 访问 Agentic Hub: https://agentichub.mioffice.cn/skills/526',
             '2. 点击"下载"按钮下载 skill',
@@ -520,6 +533,11 @@ def check_all(skip_env: bool = False, ci_mode: bool = False):
                 if guide:
                     print_info(f"  描述: {guide.get('description', '')}")
                     print_info(f"  平台: {guide.get('source', '')}")
+                    features = guide.get('features', [])
+                    if features:
+                        print_info("  功能特性:")
+                        for feature in features:
+                            print_info(f"    • {feature}")
                     print_info("  安装步骤:")
                     for step in guide.get('install_steps', []):
                         print_info(f"    {step}")
