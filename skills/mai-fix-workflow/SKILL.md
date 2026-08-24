@@ -42,10 +42,19 @@ python <WF_ROOT>/fix-db.py query <issId>
 ```
 确认状态为 conclusion_uploaded（分析已定谳,尚未修复完成）。
 
+**0.4 判定结论类型**（强制）：
+- 读取本地结论文件的"整体结论"字段
+- 若为"**无法给出结论**" → **拒绝开始修复**：
+  `该问题分析结论为"无法给出结论"，存在未闭合缺口（见结论文件 2.8 后续动作）。请先解决分析缺口（补日志/复现/QA 复现/源码确认）后再运行修复。`
+- 若为"**确定根因**" → 继续判定
+
 **判定**：
-- 评论 + 本地结论 + 数据库状态均满足 → 继续 Step 1
+- 评论 + 本地结论 + 数据库状态均满足 + 结论为"确定根因" → 继续 Step 1
 - IPD 评论有、本地缺 → 从 IPD 评论重建本地结论文件（提示用户确认），继续
+  **注意**：重建的结论文件缺少结构化字段（凭证清单、闭环对照表、审查记录），标记为"降级结论"。
+  后续步骤依赖这些字段时（如 F1 审查），需从 IPD 评论中提取或要求用户补充。
 - 任一缺失 → **拒绝开始**：`该问题尚无完整分析结论，请先运行 mai-analysis <issId> 完成根因分析与结论上传`
+- 结论为"无法给出结论" → **拒绝开始**：`该问题分析结论为"无法给出结论"，无法执行修复`
 
 通过门禁后登记修复状态：
 ```bash
@@ -69,10 +78,32 @@ python <WF_ROOT>/fix-db.py update <issId> --status fixing -t "开始修复"
 - 推荐方案：修改内容 / 修改原因 / 影响范围 / 测试计划
 
 **2.2 门禁 F1 — 方案评审（子 agent 独立复核）**：
-启动独立子 agent（无主 agent 上下文，给结论文件 + 方案），检查：
-- 方案与结论一致性：是否针对根因而非症状
-- 覆盖度：是否覆盖结论问题清单里的全部问题（多根因场景）
-- 回归风险：影响范围分析
+
+启动独立子 agent（无主 agent 上下文）。
+
+**F1 prompt 模板**：
+```
+你是 IPD 问题修复方案评审专家。请审查以下修复方案：
+
+## 审查维度
+1. 方案与结论一致性：是否针对根因而非症状
+2. 覆盖度：是否覆盖结论问题清单里的全部问题（多根因场景）
+3. 回归风险：影响范围分析
+
+## 输入材料
+- 结论文件：<WF_ROOT>/.claude/ipd-conclusions/<issId>-conclusion.md
+- 修复方案：见下方
+- 门禁 G 报告：<WF_ROOT>/.claude/ipd-conclusions/<issId>-review-G[-vN].md（可选，供参考分析可信度）
+
+## 修复方案内容
+[在此粘贴 2.1 制定的方案]
+
+## 输出要求
+- 落盘：<WF_ROOT>/.claude/ipd-conclusions/<issId>-review-F1.md
+- 格式：判定（通过/驳回）+ 逐维度审查意见 + 修改点清单（若驳回）
+```
+
+**重审上限**：默认 ≤2 轮，超限用户可豁免（记录原因）。
 
 输出落盘 `.claude/ipd-conclusions/<issId>-review-F1.md`。不过 → 修改方案重审；用户可豁免（记录原因）。
 
@@ -86,6 +117,12 @@ python <WF_ROOT>/fix-db.py update <issId> --status fixing -t "开始修复"
 - 行为类变更 → 新增/更新 `eval/cases/` YAML case（`validate_cases.py` schema 校验通过）
 - CLI 命令逻辑 → 关联 `scripts/tests/*-test.mjs`
 - 回归范围 → 相关 suite（`--set`）+ 冒烟（`--smoke`）
+
+**3.1b 对齐 analysis 验证方法**（强制）：
+- 从 conclusion 文件"修复方案"节提取每个修复项的"验证方法"
+- 确认 TDD 用例集覆盖了这些验证方法：
+  - 覆盖 → 标注对应关系（用例 ID ↔ 验证方法）
+  - 未覆盖 → 补充用例或标注"待修复阶段手动验证"
 
 **3.2 用 mai-osbot-test 编排**：调用 `mai-osbot-test` skill 按场景路由（单端 eval / JS CLI / 冒烟 / 双端按需），明确：
 - 用例清单（case-id 或 pattern）
@@ -121,10 +158,29 @@ cd <mai-env-doctor 探测到的 osbot 路径>
 
 ## Step 6: 门禁 F3 — 修复完成独立复核（子 agent）
 
-启动独立子 agent（给结论文件 + 修复 diff + 用例结果），检查：
-- 修复与结论一致性：是否修了根因而非症状
-- 用例覆盖：TDD 用例是否全跑、是否有未覆盖场景
-- 代码质量：是否引入新问题（回归风险）
+启动独立子 agent（无主 agent 上下文）。
+
+**F3 prompt 模板**：
+```
+你是 IPD 问题修复完成复核专家。请审查修复结果：
+
+## 审查维度
+1. 修复与结论一致性：是否修了根因而非症状
+2. 用例覆盖：TDD 用例是否全跑、是否有未覆盖场景
+3. 代码质量：是否引入新问题（回归风险）
+
+## 输入材料
+- 结论文件：<WF_ROOT>/.claude/ipd-conclusions/<issId>-conclusion.md
+- 修复 diff：git diff 或修改文件列表
+- 用例结果：Step 5 的测试执行结果
+- TDD 用例集：<WF_ROOT>/.claude/ipd-conclusions/<issId>-tdd-cases.md
+
+## 输出要求
+- 落盘：<WF_ROOT>/.claude/ipd-conclusions/<issId>-review-F3.md
+- 格式：判定（通过/驳回）+ 逐维度审查意见 + 修改点清单（若驳回）
+```
+
+**重审上限**：默认 ≤2 轮，超限用户可豁免（记录原因）。
 
 输出落盘 `.claude/ipd-conclusions/<issId>-review-F3.md`。不过 → 修复后重审；用户可豁免（记录原因）。
 
@@ -148,7 +204,9 @@ python <WF_ROOT>/fix-db.py update <issId> --status mr_created -f mr="!<MR编号>
 
 ## Step 8: 更新 IPD 状态 + 上传修复评论
 
-**8.1 更新状态**（`M_updateSingleIssue`）：`issueStatus: Resolved`、`exNextPlan: 已修复 commit: <hash>，待验证`。
+**8.1 更新状态**（`M_updateSingleIssue`）：
+- 修复成功（Step 5/6 全部通过）→ `issueStatus: Resolved`、`exNextPlan: 已修复 commit: <hash>，待验证`
+- 修复阻塞/失败 → 更新 fix-db 状态为 `blocked`，在 IPD 进展中说明阻塞原因，不修改 issueStatus
 
 **8.2 上传修复评论**（`M_saveComment`,HTML）：
 ```
@@ -171,11 +229,13 @@ MR/Commit / 审查记录(F1✓ F3✓)
 ## 错误处理
 
 - **结论门禁拒绝**: 提示先运行 `mai-analysis <issId>`，不绕过
+- **"无法给出结论"拒绝**: 提示先解决分析缺口（补日志/复现/QA 复现/源码确认），不绕过
 - **环境类错误（MCP/路径/glab）**: `setup.py check` / mai-env-doctor 定位,修复后重试
 - **编译失败**: 参考故障排除文档,修复后重新编译
 - **用例失败**: 区分新引入 vs 已存在;修复后重跑
-- **审查打回**: 按审查报告修改,不豁免则必须通过
+- **审查打回**: 按审查报告修改，最多 2 轮重审，超限用户可豁免（记录原因）
 - **提交失败**: 检查 commit hook,确保格式正确
+- **修复阻塞/失败**: 遇到不可恢复错误（编译无法修复、用例始终失败、根因不充分无法制定方案）→ 更新 fix-db 状态为 `blocked`，在 IPD 评论中说明阻塞原因和后续待办
 
 ## 依赖
 

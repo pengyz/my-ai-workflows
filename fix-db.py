@@ -35,7 +35,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("FIX_DB_DIR", str(SCRIPT_DIR / "fix-db")))
 INDEX_FILE = DB_DIR / "index.md"
 
-STATUSES = ["analyzing", "conclusion_uploaded", "fixing", "implementing", "mr_created", "merged", "closed"]
+STATUSES = ["analyzing", "conclusion_uploaded", "fixing", "implementing", "mr_created", "merged", "closed", "blocked"]
 TYPES = ["bugfix", "feature"]
 FIELD_KEYS = {"title", "conclusion", "note", "mr", "merge_status", "backport_mr", "type"}
 TIME_FMT = "%Y-%m-%dT%H:%M:%S%z"

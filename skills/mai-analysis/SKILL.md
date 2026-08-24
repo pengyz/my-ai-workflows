@@ -269,7 +269,28 @@ R 产出结论 vN ──> G 一次核实 ──> 无根本性推翻 → (补充�
 
 #### 3.0c 子 agent 编排契约（执行者强制）
 
-- **启动门禁 G**：使用 subagent 工具（task）派生门禁子 agent G，**无主 agent 上下文**（独立会话）。prompt 必须包含：本 skill 的 3.0b/3.1/3.2 全文 + 材料路径（`<WF_ROOT>/.claude/ipd-conclusions/<issId>-report-vN.md` / 日志目录 / 源码仓库路径 / IPD 评论）。要求：按 3.2 五维度 + 3.1 十一项逐项核查，定向核验按 3.0b，输出落盘 `<WF_ROOT>/.claude/ipd-conclusions/<issId>-review-G-vN.md`（二值判定 + 修改点清单 + 凭证抽查记录；达轮次上限时附加收敛判定）。
+- **启动门禁 G**：使用 subagent 工具（task）派生门禁子 agent G，**无主 agent 上下文**（独立会话）。
+  - **prompt 精简策略（防上下文溢出）**：不复制 3.0b/3.1/3.2 全文到 prompt，改为引用格式：
+    ```
+    你是 IPD 根因分析门禁审查专家。请按照 mai-analysis SKILL.md 的以下章节执行审查：
+    - 3.0b 定向核验协议（大文件定向检索，禁止整读超大文件）
+    - 3.1 结论输出规范（十一项逐项核查）
+    - 3.2 门禁清单（六维度：根因定性/日志利用/评论核查/凭证可证实性/降级正确性/无关分类抽查）
+
+    skill 文档路径：<WF_ROOT>/skills/mai-analysis/SKILL.md（请自行读取获取完整规则）
+
+    ## 审查材料
+    - 分析报告：<WF_ROOT>/.claude/ipd-conclusions/<issId>-report-vN.md
+    - 日志目录：<log-dir>
+    - 源码仓库：<repo-path>
+    - IPD 评论：通过 mi-adt MCP 获取
+
+    ## 输出要求
+    - 落盘：<WF_ROOT>/.claude/ipd-conclusions/<issId>-review-G-vN.md
+    - 格式：二值判定（通过/驳回）+ 修改点清单 + 凭证抽查记录
+    - 达轮次上限时附加收敛判定
+    ```
+  - G 子 agent 自行读取 skill 文档获取完整规则，避免 prompt 溢出
 - **启动 R'（收敛重跑）**：使用 subagent 工具（task）派生，**无主 agent 上下文**。prompt 输入 = 问题单信息 + 原分析结论 vN（完整）+ G 反馈（修改点清单）；要求复用与 R 相同的材料路径，基于 vN 重新根因定性（可修正或推翻），产出落盘 `<WF_ROOT>/.claude/ipd-conclusions/<issId>-report-vN+1.md`（base report.md 同步更新）；不得改动 `<issId>-conclusion.md`（由主 agent 收尾时写）。
 - **轮次记账（执行者独占）**：每次收到 G 驳回，由主 agent 追加 `.claude/ipd-conclusions/<issId>-rejections.md`（版本号 + 驳回维度 + 原因 + 时间）并自读计数；第 2 次驳回后不再派生 R'，直接请 G 输出收敛判定。
 
