@@ -174,12 +174,22 @@ SKILL_INSTALL_GUIDES = {
     'glab': {
         'source': 'https://agentichub.mioffice.cn/skills/2025',
         'description': 'GitLab CLI skill',
-        'install_cmd': 'skills install glab -g',
+        'install_steps': [
+            '1. 访问 Agentic Hub: https://agentichub.mioffice.cn/skills/2025',
+            '2. 点击"下载"按钮下载 skill',
+            '3. 解压到 ~/.agents/skills/glab/',
+            '4. 创建符号链接: ln -s ~/.agents/skills/glab ~/.claude/skills/glab',
+        ],
     },
     'ipd-mcp-setup': {
         'source': 'https://agentichub.mioffice.cn/skills/526',
         'description': 'IPD 问题库 MCP 配置 skill',
-        'install_cmd': 'skills install ipd-mcp-setup -g',
+        'install_steps': [
+            '1. 访问 Agentic Hub: https://agentichub.mioffice.cn/skills/526',
+            '2. 点击"下载"按钮下载 skill',
+            '3. 解压到 ~/.agents/skills/ipd-mcp-setup/',
+            '4. 创建符号链接: ln -s ~/.agents/skills/ipd-mcp-setup ~/.claude/skills/ipd-mcp-setup',
+        ],
     },
 }
 
@@ -202,15 +212,21 @@ def check_global_skills_installed() -> Dict[str, bool]:
     """检查全局 skill 是否已安装"""
     results = {}
 
-    # 检查 Claude skills 目录
-    claude_skills_dir = Path.home() / ".claude" / "skills"
+    # 检查 .agents/skills 目录（小米内部 skill 安装位置）
+    agents_skills_dir = Path.home() / ".agents" / "skills"
 
     for skill_name in GLOBAL_SKILLS:
-        skill_path = claude_skills_dir / skill_name
-        if skill_path.exists() or skill_path.is_symlink():
+        # 检查 .agents/skills 目录
+        skill_path = agents_skills_dir / skill_name
+        if skill_path.exists():
             results[skill_name] = True
         else:
-            results[skill_name] = False
+            # 检查 Claude skills 目录（符号链接）
+            claude_skill_path = Path.home() / ".claude" / "skills" / skill_name
+            if claude_skill_path.exists() or claude_skill_path.is_symlink():
+                results[skill_name] = True
+            else:
+                results[skill_name] = False
 
     return results
 
@@ -492,7 +508,7 @@ def check_all(skip_env: bool = False, ci_mode: bool = False):
 
     # 6. 全局 Skill（CI 环境中通常不存在）
     if not ci_mode:
-        print_section("全局 Skill")
+        print_section("全局 Skill (小米 Agentic Hub)")
         global_skills_installed = check_global_skills_installed()
         all_global_installed = True
         for skill_name, installed in global_skills_installed.items():
@@ -502,8 +518,11 @@ def check_all(skip_env: bool = False, ci_mode: bool = False):
                 guide = SKILL_INSTALL_GUIDES.get(skill_name, {})
                 print_warning(f"{skill_name} 未安装")
                 if guide:
-                    print_info(f"  安装命令: {guide.get('install_cmd', '')}")
-                    print_info(f"  参考: {guide.get('source', '')}")
+                    print_info(f"  描述: {guide.get('description', '')}")
+                    print_info(f"  平台: {guide.get('source', '')}")
+                    print_info("  安装步骤:")
+                    for step in guide.get('install_steps', []):
+                        print_info(f"    {step}")
                 all_global_installed = False
         if not all_global_installed:
             all_ok = False
