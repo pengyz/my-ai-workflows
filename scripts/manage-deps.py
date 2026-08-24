@@ -163,6 +163,26 @@ PROJECT_SKILLS = [
     'osbot-trace-viz',
 ]
 
+# 全局 skill 列表（需要从 agentichub 安装）
+GLOBAL_SKILLS = [
+    'glab',
+    'ipd-mcp-setup',
+]
+
+# skill 安装说明
+SKILL_INSTALL_GUIDES = {
+    'glab': {
+        'source': 'https://agentichub.mioffice.cn/skills/2025',
+        'description': 'GitLab CLI skill',
+        'install_cmd': 'skills install glab -g',
+    },
+    'ipd-mcp-setup': {
+        'source': 'https://agentichub.mioffice.cn/skills/526',
+        'description': 'IPD 问题库 MCP 配置 skill',
+        'install_cmd': 'skills install ipd-mcp-setup -g',
+    },
+}
+
 def check_project_skills_installed() -> Dict[str, bool]:
     """检查项目级 skill 是否已安装"""
     results = {}
@@ -171,6 +191,22 @@ def check_project_skills_installed() -> Dict[str, bool]:
     for skill_name in PROJECT_SKILLS:
         skill_path = skills_dir / skill_name
         # 检查是否存在且是符号链接
+        if skill_path.exists() or skill_path.is_symlink():
+            results[skill_name] = True
+        else:
+            results[skill_name] = False
+
+    return results
+
+def check_global_skills_installed() -> Dict[str, bool]:
+    """检查全局 skill 是否已安装"""
+    results = {}
+
+    # 检查 Claude skills 目录
+    claude_skills_dir = Path.home() / ".claude" / "skills"
+
+    for skill_name in GLOBAL_SKILLS:
+        skill_path = claude_skills_dir / skill_name
         if skill_path.exists() or skill_path.is_symlink():
             results[skill_name] = True
         else:
@@ -452,6 +488,24 @@ def check_all(skip_env: bool = False, ci_mode: bool = False):
                 print_warning(f"{skill_name} 未安装")
                 all_skills_installed = False
         if not all_skills_installed:
+            all_ok = False
+
+    # 6. 全局 Skill（CI 环境中通常不存在）
+    if not ci_mode:
+        print_section("全局 Skill")
+        global_skills_installed = check_global_skills_installed()
+        all_global_installed = True
+        for skill_name, installed in global_skills_installed.items():
+            if installed:
+                print_success(skill_name)
+            else:
+                guide = SKILL_INSTALL_GUIDES.get(skill_name, {})
+                print_warning(f"{skill_name} 未安装")
+                if guide:
+                    print_info(f"  安装命令: {guide.get('install_cmd', '')}")
+                    print_info(f"  参考: {guide.get('source', '')}")
+                all_global_installed = False
+        if not all_global_installed:
             all_ok = False
 
     # 6. 环境变量（CI 环境可跳过）
