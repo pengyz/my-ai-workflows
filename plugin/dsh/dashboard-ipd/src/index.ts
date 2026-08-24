@@ -61,6 +61,43 @@ export const DEFAULT_MR_BASE_URL = 'https://git.n.xiaomi.com/ai-framework/osbot/
 /** 默认工作流仓库根: 环境变量 `MY_AI_WORKFLOWS` 优先, 否则 `~/my-ai-workflows`。 */
 const DEFAULT_WORKFLOW_ROOT = '~/my-ai-workflows'
 
+/** 每个 skill 的关键约束，根据 skill 动态注入 */
+const SKILL_CONSTRAINTS: Record<string, string[]> = {
+  'mai-analysis': [
+    '必须基于日志定位根因，所有结论有日志+代码证据支撑',
+    '根因定谳必须结合源码分析（强制）：全链路源码遍历，日志↔源码双向闭合',
+    '结论整体二值化：确定根因 / 无法给出结论，禁止模糊定责',
+    '门禁 G 核实后才可上传结论，收敛重跑默认 ≤2 轮',
+    '凭证清单强制：实际读取的 file:line + 原文摘录 + 执行操作',
+  ],
+  'mai-fix-workflow': [
+    '必须先有 mai-analysis 的完整结论（IPD 评论 + 本地文件双查），无结论拒绝开始',
+    'TDD 先行：修复前先定用例集合（mai-osbot-test 编排），红→绿',
+    '关键决策前子 agent 独立复核：方案评审（F1）、完成复核（F3）',
+    '充分验证：新增用例 + 相关回归 + 冒烟 100% PASS',
+    '修复方案必须绑定根因，说明修复机制和验证方法',
+  ],
+}
+
+/** 每个 skill 的可用工具列表 */
+const SKILL_TOOLS: Record<string, string[]> = {
+  'mai-analysis': [
+    '- mi-adt MCP: 查询 IPD 问题 (M_issueQuery)、评论 (M_pageOverallComment/M_getCommentList)、保存评论 (M_saveComment)',
+    '- fix-db.py: 修复数据库查询/更新 (python <WF_ROOT>/fix-db.py query/update)',
+    '- wf_root.py: 工作流根目录定位 (python <WF_ROOT>/wf_root.py --check)',
+    '- read/grep/glob: 文件读取和搜索',
+    '- subagent: 启动子 agent (门禁 G 或收敛重跑 R\')',
+  ],
+  'mai-fix-workflow': [
+    '- mi-adt MCP: 查询 IPD 问题、评论、保存评论',
+    '- fix-db.py: 修复数据库查询/更新',
+    '- mai-osbot-test: 测试编排 (行为类 eval/CLI/冒烟/双端)',
+    '- glab: GitLab API 操作 (MR 创建/查询)',
+    '- read/grep/glob: 文件读取和搜索',
+    '- subagent: 启动子 agent (方案评审 F1/完成复核 F3)',
+  ],
+}
+
 function expandHome(path: string): string {
   return path.replace(/^~(?=\/|$)/, homedir())
 }
@@ -126,27 +163,29 @@ function buildSkillContext(workflowRoot: string, skillName: string): string {
   }
   try {
     const content = readFileSync(skillPath, 'utf-8')
-    // 提取关键部分：触发方式、前置、工作流程步骤、输出
+    // 提取关键部分：触发方式、前置、工作流程步骤、输出、门禁、收敛
     const sections: string[] = []
     const lines = content.split('\n')
     let currentSection = ''
+    let inTargetSection = false
     for (const line of lines) {
       // 捕获标题
       const headerMatch = line.match(/^(#{1,4})\s+(.+)/)
       if (headerMatch !== null && headerMatch[1] !== undefined && headerMatch[2] !== undefined) {
         currentSection = headerMatch[2]
+        // 判断是否进入目标 section
+        inTargetSection = (
+          currentSection.includes('触发') ||
+          currentSection.includes('前置') ||
+          currentSection.includes('Step') ||
+          currentSection.includes('输出') ||
+          currentSection.includes('门禁') ||
+          currentSection.includes('收敛') ||
+          currentSection.includes('判定')
+        )
       }
-      // 收集关键部分
-      if (
-        currentSection.includes('触发') ||
-        currentSection.includes('前置') ||
-        currentSection.includes('Step') ||
-        currentSection.includes('输出') ||
-        currentSection.includes('工具') ||
-        currentSection.includes('关键约束') ||
-        currentSection.includes('门禁') ||
-        currentSection.includes('收敛')
-      ) {
+      // 收集目标 section 的内容
+      if (inTargetSection) {
         sections.push(line)
       }
     }
@@ -156,7 +195,12 @@ function buildSkillContext(workflowRoot: string, skillName: string): string {
       const summary = summaryMatch !== null && summaryMatch[1] !== undefined ? summaryMatch[1].trim() : skillName
       return `<skill-summary>\n${summary}\n</skill-summary>\n\n完整 skill 文档路径: ${skillPath}\n请先读取该文件了解详细工作流程。`
     }
-    return sections.join('\n')
+    // 限制输出长度，避免过大
+    const output = sections.join('\n')
+    if (output.length > 16000) {
+      return output.slice(0, 16000) + '\n\n... [内容截断，请读取完整文档]'
+    }
+    return output
   } catch {
     return `[读取 ${skillName} 失败]`
   }
@@ -185,30 +229,25 @@ function registerAgentCommand(
       const controller = new AbortController()
       const label = `${action}: ${issId}`
       // 读取 skill 内容，构建 system-reminder 注入
-      const skillContext = buildSkillContext(config.workflowRoot ?? expandHome(DEFAULT_WORKFLOW_ROOT), skill)
+      const workflowRoot = config.workflowRoot ?? expandHome(DEFAULT_WORKFLOW_ROOT)
+      const skillContext = buildSkillContext(workflowRoot, skill)
+      const constraints = SKILL_CONSTRAINTS[skill] ?? []
+      const tools = SKILL_TOOLS[skill] ?? []
       const promptText = [
         `<system-reminder>`,
-        `你是 IPD 问题分析专家。当前任务：对问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}。`,
+        `你是 IPD 问题${isAnalyze ? '分析' : '修复'}专家。当前任务：对问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}。`,
         ``,
         `## 可用 Skill: ${skill}`,
         skillContext,
         ``,
         `## 可用工具`,
-        `- mi-adt MCP: 查询 IPD 问题 (M_issueQuery)、评论 (M_pageOverallComment/M_getCommentList)、保存评论 (M_saveComment)`,
-        `- fix-db.py: 修复数据库查询/更新 (python ${config.workflowRoot}/fix-db.py query/update)`,
-        `- wf_root.py: 工作流根目录定位 (python ${config.workflowRoot}/wf_root.py --check)`,
-        `- glab: GitLab API 操作 (MR 创建/查询)`,
-        `- read/grep/glob: 文件读取和搜索`,
-        `- subagent: 启动子 agent (门禁 G 或收敛重跑 R')`,
+        ...tools,
         ``,
         `## 关键约束`,
-        `1. 必须基于日志定位根因，所有结论有日志+代码证据支撑`,
-        `2. 根因定谳必须结合源码分析（强制）`,
-        `3. 结论整体二值化：确定根因 / 无法给出结论`,
-        `4. 门禁 G 核实后才可上传结论`,
+        ...constraints.map((c, i) => `${i + 1}. ${c}`),
         `</system-reminder>`,
         ``,
-        `请按照 ${skill} 工作流执行，首先读取完整 skill 文档：${config.workflowRoot}/skills/${skill}/SKILL.md`,
+        `请按照 ${skill} 工作流执行，首先读取完整 skill 文档：${workflowRoot}/skills/${skill}/SKILL.md`,
       ].join('\n')
       // startContinuable 建立持久可续子 agent：面板可监控、可追加信息、可终止。
       const started = await ctx.subagents.startContinuable({
