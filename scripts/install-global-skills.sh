@@ -30,6 +30,7 @@ declare -A HARNESS_DIRS=(
     ["Claude Code"]="$HOME/.claude/skills"
     ["Codex"]="$HOME/.codex/skills"
     ["OpenCode"]="$HOME/.config/opencode/skills"
+    ["Kiro"]="$HOME/.kiro/skills"
     ["DSH (用户级)"]="$HOME/.agents/skills"
 )
 

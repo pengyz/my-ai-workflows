@@ -172,6 +172,7 @@ def harness_dirs() -> list[tuple[str, Path]]:
         ("Claude Code", home / ".claude" / "skills"),
         ("Codex", home / ".codex" / "skills"),
         ("OpenCode", home / ".config" / "opencode" / "skills"),
+        ("Kiro", home / ".kiro" / "skills"),
         ("DSH (用户级)", home / ".agents" / "skills"),
     ]
     try:
