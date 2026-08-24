@@ -518,6 +518,7 @@ export function IpdBoardPanel({ useSessions, refresh, runAction, stop, saveNote,
                           </td>
                           <td style={s.td}>
                             <input
+                              key={`${row.issId}-${noteValue}`}
                               style={{ ...s.note, ...(noteValue !== '' ? s.noteFilled : {}) }}
                               defaultValue={noteValue}
                               placeholder="标注…"

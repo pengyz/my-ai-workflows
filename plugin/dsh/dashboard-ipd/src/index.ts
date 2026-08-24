@@ -23,7 +23,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fetchBoard, DEFAULT_LIMIT } from './aggregate.js'
 import type {} from './events.js'
@@ -115,6 +115,53 @@ function parseIssId(raw: string): string {
   return raw.trim().split(/\s+/)[0] ?? ''
 }
 
+/**
+ * 读取 skill SKILL.md 并构建 system-reminder 注入内容。
+ * 提取关键步骤、工具、约束，减少 LLM 探索次数。
+ */
+function buildSkillContext(workflowRoot: string, skillName: string): string {
+  const skillPath = resolve(workflowRoot, 'skills', skillName, 'SKILL.md')
+  if (!existsSync(skillPath)) {
+    return `[skill ${skillName} 未找到: ${skillPath}]`
+  }
+  try {
+    const content = readFileSync(skillPath, 'utf-8')
+    // 提取关键部分：触发方式、前置、工作流程步骤、输出
+    const sections: string[] = []
+    const lines = content.split('\n')
+    let currentSection = ''
+    for (const line of lines) {
+      // 捕获标题
+      const headerMatch = line.match(/^(#{1,4})\s+(.+)/)
+      if (headerMatch !== null && headerMatch[1] !== undefined && headerMatch[2] !== undefined) {
+        currentSection = headerMatch[2]
+      }
+      // 收集关键部分
+      if (
+        currentSection.includes('触发') ||
+        currentSection.includes('前置') ||
+        currentSection.includes('Step') ||
+        currentSection.includes('输出') ||
+        currentSection.includes('工具') ||
+        currentSection.includes('关键约束') ||
+        currentSection.includes('门禁') ||
+        currentSection.includes('收敛')
+      ) {
+        sections.push(line)
+      }
+    }
+    // 如果提取内容太少，返回摘要
+    if (sections.length < 20) {
+      const summaryMatch = content.match(/description:\s*\|?\s*\n([\s\S]*?)(?=\n---|\n#)/)
+      const summary = summaryMatch !== null && summaryMatch[1] !== undefined ? summaryMatch[1].trim() : skillName
+      return `<skill-summary>\n${summary}\n</skill-summary>\n\n完整 skill 文档路径: ${skillPath}\n请先读取该文件了解详细工作流程。`
+    }
+    return sections.join('\n')
+  } catch {
+    return `[读取 ${skillName} 失败]`
+  }
+}
+
 /** 注册一个面板动作命令: 启动 continuable 子 agent 执行分析/修复并记录 `ipd/agent-run`。 */
 function registerAgentCommand(
   ctx: Context,
@@ -137,6 +184,32 @@ function registerAgentCommand(
       }
       const controller = new AbortController()
       const label = `${action}: ${issId}`
+      // 读取 skill 内容，构建 system-reminder 注入
+      const skillContext = buildSkillContext(config.workflowRoot ?? expandHome(DEFAULT_WORKFLOW_ROOT), skill)
+      const promptText = [
+        `<system-reminder>`,
+        `你是 IPD 问题分析专家。当前任务：对问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}。`,
+        ``,
+        `## 可用 Skill: ${skill}`,
+        skillContext,
+        ``,
+        `## 可用工具`,
+        `- mi-adt MCP: 查询 IPD 问题 (M_issueQuery)、评论 (M_pageOverallComment/M_getCommentList)、保存评论 (M_saveComment)`,
+        `- fix-db.py: 修复数据库查询/更新 (python ${config.workflowRoot}/fix-db.py query/update)`,
+        `- wf_root.py: 工作流根目录定位 (python ${config.workflowRoot}/wf_root.py --check)`,
+        `- glab: GitLab API 操作 (MR 创建/查询)`,
+        `- read/grep/glob: 文件读取和搜索`,
+        `- subagent: 启动子 agent (门禁 G 或收敛重跑 R')`,
+        ``,
+        `## 关键约束`,
+        `1. 必须基于日志定位根因，所有结论有日志+代码证据支撑`,
+        `2. 根因定谳必须结合源码分析（强制）`,
+        `3. 结论整体二值化：确定根因 / 无法给出结论`,
+        `4. 门禁 G 核实后才可上传结论`,
+        `</system-reminder>`,
+        ``,
+        `请按照 ${skill} 工作流执行，首先读取完整 skill 文档：${config.workflowRoot}/skills/${skill}/SKILL.md`,
+      ].join('\n')
       // startContinuable 建立持久可续子 agent：面板可监控、可追加信息、可终止。
       const started = await ctx.subagents.startContinuable({
         provider: 'spawn',
@@ -144,7 +217,7 @@ function registerAgentCommand(
         request: {
           prompt: [{
             type: 'text',
-            text: `对 IPD 问题 ${issId} 执行${isAnalyze ? '根因分析' : '修复'}, 使用 ${skill} 工作流。`,
+            text: promptText,
           }],
           parent: invocation.agent,
           maxDepth: 3,
