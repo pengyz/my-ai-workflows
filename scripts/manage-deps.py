@@ -155,6 +155,61 @@ def check_osbot_repo() -> Dict[str, any]:
 
     return results
 
+# 项目级 skill 列表（需要从 osbot 仓库安装）
+PROJECT_SKILLS = [
+    'osbot-eval',
+    'osbot-review',
+    'osbot-mr-preflight',
+    'osbot-trace-viz',
+]
+
+def check_project_skills_installed() -> Dict[str, bool]:
+    """检查项目级 skill 是否已安装"""
+    results = {}
+    skills_dir = PROJECT_ROOT / "skills"
+
+    for skill_name in PROJECT_SKILLS:
+        skill_path = skills_dir / skill_name
+        # 检查是否存在且是符号链接
+        if skill_path.exists() or skill_path.is_symlink():
+            results[skill_name] = True
+        else:
+            results[skill_name] = False
+
+    return results
+
+def install_project_skills(osbot_path: Path):
+    """安装项目级 skill"""
+    skills_dir = PROJECT_ROOT / "skills"
+    osbot_skills_dir = osbot_path / ".agents" / "skills"
+
+    if not osbot_skills_dir.exists():
+        print_error(f"osbot skills 目录不存在: {osbot_skills_dir}")
+        return False
+
+    installed = 0
+    for skill_name in PROJECT_SKILLS:
+        source = osbot_skills_dir / skill_name
+        target = skills_dir / skill_name
+
+        if not source.exists():
+            print_warning(f"skill 不存在: {skill_name}")
+            continue
+
+        if target.exists() or target.is_symlink():
+            print_success(f"{skill_name}: 已安装")
+            continue
+
+        # 创建符号链接
+        try:
+            os.symlink(source, target, target_is_directory=True)
+            print_success(f"{skill_name}: 安装成功")
+            installed += 1
+        except Exception as e:
+            print_error(f"{skill_name}: 安装失败 - {e}")
+
+    return installed > 0
+
 # ==================== 安装函数 ====================
 
 def install_glab():
@@ -385,7 +440,21 @@ def check_all(skip_env: bool = False, ci_mode: bool = False):
             print_warning("osbot: 未找到")
             all_ok = False
 
-    # 5. 环境变量（CI 环境可跳过）
+    # 5. 项目级 Skill（CI 环境中通常不存在）
+    if not ci_mode:
+        print_section("项目级 Skill")
+        skills_installed = check_project_skills_installed()
+        all_skills_installed = True
+        for skill_name, installed in skills_installed.items():
+            if installed:
+                print_success(skill_name)
+            else:
+                print_warning(f"{skill_name} 未安装")
+                all_skills_installed = False
+        if not all_skills_installed:
+            all_ok = False
+
+    # 6. 环境变量（CI 环境可跳过）
     if not skip_env and not ci_mode:
         print_section("环境变量")
         env_vars = {
@@ -439,6 +508,29 @@ def install_all():
             if install != 'n':
                 install_python_package(package)
 
+    # 3. 检查并安装项目级 Skill
+    print_section("项目级 Skill")
+
+    skills_installed = check_project_skills_installed()
+    all_installed = all(skills_installed.values())
+
+    if all_installed:
+        print_success("所有项目级 skill 已安装")
+    else:
+        print_warning("部分项目级 skill 未安装")
+        print_info(f"需要安装的 skill: {', '.join(s for s, installed in skills_installed.items() if not installed)}")
+
+        # 检查 osbot 仓库
+        osbot = check_osbot_repo()
+        if not osbot['exists']:
+            print_error("osbot 仓库不存在，无法安装项目级 skill")
+            print_info("请先运行: python3 scripts/manage-deps.py setup")
+        else:
+            install = input("是否安装项目级 skill? (Y/n): ").strip().lower()
+            if install != 'n':
+                osbot_path = Path(osbot['path'])
+                install_project_skills(osbot_path)
+
 def setup_all():
     """交互式配置所有依赖"""
     print_header("交互式配置向导")
@@ -478,6 +570,20 @@ def setup_all():
         setup = input("是否设置 osbot 仓库? (Y/n): ").strip().lower()
         if setup != 'n':
             setup_osbot_repo()
+            # 重新检查
+            osbot = check_osbot_repo()
+
+    # 5. 项目级 Skill
+    skills_installed = check_project_skills_installed()
+    if not all(skills_installed.values()):
+        print_warning("部分项目级 skill 未安装")
+        if osbot['exists']:
+            setup = input("是否安装项目级 skill? (Y/n): ").strip().lower()
+            if setup != 'n':
+                osbot_path = Path(osbot['path'])
+                install_project_skills(osbot_path)
+        else:
+            print_error("osbot 仓库不存在，无法安装项目级 skill")
 
     print()
     print_success("配置完成！")
