@@ -445,3 +445,4 @@ HTML 格式要点：整个分析作为单个 text 节点、`<p>` 分段、`<br>`
 - 测试复现: `mai-osbot-test`（测试编排）/ `osbot-talk-to-osbot`、`sidekick-talk`（与运行实例交互抓日志）/ `osbot-eval`（场景用例）- 2.8 路径 B 自行复现抓日志（无可用复现手段时路径 B 降级为 A/C）；修复验证由 mai-fix-workflow 执行
 - 开单跟进: `osbot-issue` skill - 2.9 长线方案（门禁通过后）给 owner 开独立 issue 单（含依赖检查）
 - 本地目录: `.claude/ipd-conclusions/` - 结论与审查报告留档
+# 测试

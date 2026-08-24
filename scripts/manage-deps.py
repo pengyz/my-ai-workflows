@@ -326,7 +326,7 @@ def setup_osbot_repo():
 
 # ==================== 主函数 ====================
 
-def check_all():
+def check_all(skip_env: bool = False, ci_mode: bool = False):
     """检查所有依赖"""
     print_header("依赖检查报告")
 
@@ -362,40 +362,43 @@ def check_all():
             print_warning(name)
             all_ok = False
 
-    # 3. MCP 配置
-    print_section("MCP 配置")
-    mcp_results = check_mcp_config()
-    for name, configured in mcp_results.items():
-        if configured:
-            print_success(name)
+    # 3. MCP 配置（CI 环境中通常不存在）
+    if not ci_mode:
+        print_section("MCP 配置")
+        mcp_results = check_mcp_config()
+        for name, configured in mcp_results.items():
+            if configured:
+                print_success(name)
+            else:
+                print_warning(name)
+                all_ok = False
+
+    # 4. 外部仓库（CI 环境中通常不存在）
+    if not ci_mode:
+        print_section("外部仓库")
+        osbot = check_osbot_repo()
+        if osbot['exists']:
+            print_success(f"osbot: {osbot['path']}")
+            if osbot['skills']:
+                print_info(f"  项目级 skills: {', '.join(osbot['skills'].keys())}")
         else:
-            print_warning(name)
+            print_warning("osbot: 未找到")
             all_ok = False
 
-    # 4. 外部仓库
-    print_section("外部仓库")
-    osbot = check_osbot_repo()
-    if osbot['exists']:
-        print_success(f"osbot: {osbot['path']}")
-        if osbot['skills']:
-            print_info(f"  项目级 skills: {', '.join(osbot['skills'].keys())}")
-    else:
-        print_warning("osbot: 未找到")
-        all_ok = False
-
-    # 5. 环境变量
-    print_section("环境变量")
-    env_vars = {
-        'IPD_USER': 'IPD 用户名',
-        'MY_AI_WORKFLOWS': '工作流根目录',
-        'OSBOT_PATH': 'osbot 仓库路径',
-    }
-    for name, desc in env_vars.items():
-        value = os.environ.get(name)
-        if value:
-            print_success(f"{name} = {value}")
-        else:
-            print_warning(f"{name} 未设置 ({desc})")
+    # 5. 环境变量（CI 环境可跳过）
+    if not skip_env and not ci_mode:
+        print_section("环境变量")
+        env_vars = {
+            'IPD_USER': 'IPD 用户名',
+            'MY_AI_WORKFLOWS': '工作流根目录',
+            'OSBOT_PATH': 'osbot 仓库路径',
+        }
+        for name, desc in env_vars.items():
+            value = os.environ.get(name)
+            if value:
+                print_success(f"{name} = {value}")
+            else:
+                print_warning(f"{name} 未设置 ({desc})")
 
     # 总结
     print()
@@ -487,11 +490,15 @@ def main():
     parser = argparse.ArgumentParser(description='依赖管理工具')
     parser.add_argument('action', choices=['check', 'install', 'setup'],
                         help='操作: check(检查), install(安装), setup(配置)')
+    parser.add_argument('--skip-env', action='store_true',
+                        help='跳过环境变量检查（CI 环境使用）')
+    parser.add_argument('--ci', action='store_true',
+                        help='CI 模式：跳过 MCP 配置、外部仓库、环境变量检查')
 
     args = parser.parse_args()
 
     if args.action == 'check':
-        success = check_all()
+        success = check_all(skip_env=args.skip_env, ci_mode=args.ci)
         sys.exit(0 if success else 1)
     elif args.action == 'install':
         install_all()
